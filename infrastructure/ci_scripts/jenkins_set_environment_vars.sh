@@ -1,3 +1,4 @@
+#!/bin/bash
 #
 # determine which maven artifact version we will set this build to
 # This script is intended to be called from withing CI (jenkins) build jobs
