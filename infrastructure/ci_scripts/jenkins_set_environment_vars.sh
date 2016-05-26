@@ -9,7 +9,7 @@
 GIT_BRANCH_LOCALNAME=${GIT_BRANCH#*/}
 
 # set the version prefix, 1 for "master", 2 for "not-master" a.k.a. feature
-if [["${GIT_BRANCH_LOCALNAME}" == "master" ]]; then BUILD_MAVEN_VERSION_PREFIX="1"; else BUILD_MAVEN_VERSION_PREFIX="2"; fi
+if [[ "${GIT_BRANCH_LOCALNAME}" == "master" ]]; then BUILD_MAVEN_VERSION_PREFIX="1"; else BUILD_MAVEN_VERSION_PREFIX="2"; fi
 
 # examples: "1-master-SNAPSHOT", "2-FRESH-123-SNAPSHOT"
 BUILD_MAVEN_VERSION_LOCAL="${BUILD_MAVEN_VERSION_PREFIX}-${GIT_BRANCH_LOCALNAME}-SNAPSHOT"
