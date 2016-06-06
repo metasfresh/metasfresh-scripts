@@ -28,7 +28,6 @@ REP_DB_HOST=
 SYNC_SCRIPT=
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONF_FILE=${SCRIPT_DIR}/.cluster_replication.conf
 RUN_MODE=NOTSET
 
 sanity_check(){
