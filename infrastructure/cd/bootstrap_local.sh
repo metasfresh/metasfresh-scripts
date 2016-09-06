@@ -206,16 +206,11 @@ rollout_minor()
 {
 	trace rollout_minor BEGIN
 
-	local MINOR_SH=${LOCAL_DIR}/minor_remote.sh
-	check_file_exists $MINOR_SH
-
-	#invoking script
 	trace rollout_minor "Invoking remote script minor_remote.sh"
 	trace rollout_minor "=========================================================="
-	# Note: 
-	#   the -tt is necessary because we might call sudo on the remote site and sudo requries a tty 
-	#   Multiple -t options force tty allocation, even if ssh has no local tty.
-	ssh -tt -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/minor_remote.sh -n" 
+
+	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/minor_remote.sh -d ${REMOTE_EXEC_DIR}/.." 
+
 	trace rollout_minor "=========================================================="
 	trace rollout_minor "Done with remote script minor_remote.sh"
 	
@@ -238,6 +233,7 @@ validate_migration()
 	trace validate_migration "=========================================================="
 
 	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/sql_remote.sh -d ${REMOTE_EXEC_DIR}/.. -n ${VALIDATE_MIGRATION_TEMPLATE_DB} ${VALIDATE_MIGRATION_TEST_DB}" 
+
 	trace validate_migration "=========================================================="
 	trace validate_migration "Done with remote script sql_remote.sh"
 
@@ -254,6 +250,7 @@ rollout_database()
 	trace rollout_database "=========================================================="
 
 	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/sql_remote.sh -d ${REMOTE_EXEC_DIR}/.." 
+
 	trace rollout_database "=========================================================="
 	trace rollout_database "Done with remote script sql_remote.sh"
 
