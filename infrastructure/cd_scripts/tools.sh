@@ -1,6 +1,7 @@
 #!bin/bash
 #
 # Contains useful methods.
+#
 
 check_file_exists()
 {
@@ -43,19 +44,43 @@ check_file_readable(){
 	exit 1
 }
 
+#
+# If the given variable is not set (value being either "" or "NOT_SET"), then this method fails the script (exit 1)
+#
 check_var()
 {
-	varName=$1
-	var=$2
+	local varName=$1
+	local var=$2
 	
-	if [ "$var" = "" ]
+	if [[ "$var" = "" || "$var" = "NOT_SET" ]]
 	then
-		trace "check_vars" "Variable/Param '${varName}' must be set"
+		trace "check_var" "Variable/Param '${varName}' must be set"
 		exit 1
 	fi
-	trace "check_vars" "Variable/Param '${varName}' is set to ${var}"
+	trace "check_var" "Variable/Param '${varName}' is set to ${var}"
 	
 	return 0
+}
+
+# 
+# If the first given variable is not set (value being either "" or "NOT_SET"), then it falls back to the second given variable 
+# and sets the first var to the second var's value. If the second variabe is not set either then this method fails the script (exit 1).
+#
+check_var_fallback()
+{
+	local varName=$1
+	local var=$2
+	local fallback_varName=$3
+	local fallback_var=$4
+	
+	if [[ "$var" = "" || "$var" = "NOT_SET" ]]
+	then
+		trace "check_var_fallback" "Variable '${varName}' is not set. Trying fallback to variable '${fallback_varName}'"
+		check_var $fallback_varName $fallback_var
+		trace "check_var_fallback" "Setting '${varName}' to ${fallback_var}"
+		eval $varName=$fallback_var
+	fi
+	trace "check_var_fallback" "Variable/Param '${varName}' is set to ${var}"
 }
 
 check_std_tool()
@@ -88,12 +113,27 @@ check_exit_code()
 check_vars_server()
 {
 	trace check_vars_server BEGIN
-	
-	check_var "ADEMPIERE_DEPLOY" $ADEMPIERE_DEPLOY
-	check_var "ADEMPIERE_HOME" $ADEMPIERE_HOME
-	check_var "JAVA_HOME" $JAVA_HOME
-	
+
+	check_var_fallback "METASFRESH_HOME" ${METASFRESH_HOME:-NOT_SET} "ADEMPIERE_HOME" ${ADEMPIERE_HOME:-NOT_SET}
+			
 	trace check_vars_server END
+}
+
+check_java_version()
+{
+        trace check_java_version BEGIN
+    
+        if [[ -f "/usr/bin/java" ]]; then
+            local JAVA_VERSION="$(/usr/bin/java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d "." -f2)"
+            if [[ ! $JAVA_VERSION == "8" ]]; then
+                trace check_java_version "[ERROR] JAVA-Version does not match supported version (found Java 1.${JAVA_VERSION})! Only Java 1.8 JDK supported! Check ' http://docs.metasfresh.org/howto_collection/Wie_aktualisiere_ich_die_Java_Version_auf_meinem_server.html ' for more infos and make sure 'java -version' is 1.8.x ! NOTE: you may also need to update to Java-8 on your Clients: ' http://docs.metasfresh.org/howto_collection/Wie_aktualisiere_ich_die_Java_Version_auf_meinem_client.html '"
+                exit 1
+            fi
+        else
+            trace check_java_version "could not find valid /usr/bin/java. assuming Java 1.8 JDK is installed."
+        fi
+        
+        trace check_java_version END
 }
 
 check_rollout_user()
@@ -114,8 +154,8 @@ check_vars_database()
 {
 	trace check_vars_database BEGIN
 	
-	check_var "ADEMPIERE_DB_SERVER" $ADEMPIERE_DB_SERVER
-	check_var "ADEMPIERE_DB_NAME" $ADEMPIERE_DB_NAME
+	check_var_fallback "METASFRESH_DB_SERVER" ${METASFRESH_DB_SERVER:-NOT_SET} "ADEMPIERE_DB_SERVER" ${ADEMPIERE_DB_SERVER:-NOT_SET}
+	check_var_fallback "METASFRESH_DB_NAME" ${METASFRESH_DB_NAME:-NOT_SET} "ADEMPIERE_DB_NAME" ${ADEMPIERE_DB_NAME:-NOT_SET}
 	
 	trace check_vars_database END
 }
@@ -142,55 +182,36 @@ check_vars_minor()
 {
 	trace check_vars_minor BEGIN
 
-	check_var "ADEMPIERE_HOME" $ADEMPIERE_HOME
-	check_var "ADEMPIERE_DEPLOY" $ADEMPIERE_DEPLOY
-	check_var "JAVA_HOME" $JAVA_HOME
+	check_var_fallback "METASFRESH_HOME" ${METASFRESH_HOME:-NOT_SET} "ADEMPIERE_HOME" ${ADEMPIERE_HOME:-NOT_SET}
 	check_var "PATH" $PATH
-	
+
 	trace check_vars_minor END
 }
 
-start_adempiere()
+start_metasfresh()
 {
-	trace start_adempiere BEGIN
+	trace start_metasfresh BEGIN
 
-	sudo systemctl start tomcat.service
-
-	trace start_adempiere END
-}
-
-stop_adempiere()
-{
-	trace stop_adempiere BEGIN
-
-	sudo systemctl stop tomcat.service
-
-	trace stop_adempiere END
-}
-
-#
-# Tool for update_adempiere_scripts. 
-# Check if the file to rename exits
-# Renames the file unless the target file exists
-#
-rename_file()
-{
-	trace rename_file BEGIN
-	
-	local renameFileName=$1
-	local renameFileNameExt=$2
-	local renameFileNameSuffix=$3
-	
-	check_file_exists ${renameFileName}.${renameFileNameExt}
-	
-	if [ -f ${renameFileName}_${renameFileNameSuffix}.${renameFileNameExt} ]; then
-		trace rename_file "${renameFileName}_${renameFileNameSuffix}.${renameFileNameExt} exists. Doing nothing"
+	if [ ${SKIP_START_STOP:-false} == "true" ]; then
+		trace start_metasfresh "SKIP_START_STOP = ${SKIP_START_STOP}, so we skip this"
 	else
-		echo "mv -v ${renameFileName}.${renameFileNameExt} ${renameFileName}_${renameFileNameSuffix}.${renameFileNameExt}"
-		mv -v ${renameFileName}.${renameFileNameExt} ${renameFileName}_${renameFileNameSuffix}.${renameFileNameExt}
+		service metasfresh_server start
 	fi
-	
-	trace rename_file END
+
+	trace start_metasfresh END
+}
+
+stop_metasfresh()
+{
+	trace stop_metasfresh BEGIN
+
+	if [ ${SKIP_START_STOP:-false} == "true" ]; then
+		trace start_metasfresh "SKIP_START_STOP = ${SKIP_START_STOP}, so we skip this"
+	else
+		service metasfresh_server stop
+	fi
+		
+	trace stop_metasfresh END
 }
 
 delete_rollout()
@@ -227,14 +248,4 @@ clean_previous_rollout()
 	ln -s ${abs_rollout_dir} ${ROLLOUT_DIR}/../../rollout_current
 	
 	trace clean_previous_rollout END
-}
-
-set_CONFIGFILE_var()
-{
-	if [ -f /etc/debian_version ]; then
-		CONFIGFILE="/etc/adempiere/adempiere.conf"
-	else
-		# assuming gentoo
-		CONFIGFILE="/etc/conf.d/adempiere"
-	fi
 }
