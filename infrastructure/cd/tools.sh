@@ -45,6 +45,22 @@ check_file_readable(){
 }
 
 #
+# Checks if the given file is an readable and executable file (and not a directory).
+#
+check_file_executable(){
+
+	fileName=$1
+	
+	if [[ -f $fileName && -x $fileName && -r $fileName ]]; then
+		trace "check_file_readable" "File ${fileName} is readable"
+		return 0
+	fi
+	
+	trace "check_file_readable" "File ${fileName} is not readable"
+	exit 1
+}
+
+#
 # If the given variable is not set (value being either "" or "NOT_SET"), then this method fails the script (exit 1)
 #
 check_var()

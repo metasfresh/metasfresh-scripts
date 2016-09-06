@@ -234,9 +234,6 @@ validate_migration()
 	check_var VALIDATE_MIGRATION_TEMPLATE_DB ${VALIDATE_MIGRATION_TEMPLATE_DB:-NOT_SET}
 	check_var VALIDATE_MIGRATION_TEST_DB ${VALIDATE_MIGRATION_TEST_DB:-NOT_SET}
 	
-	trace validate_migration "Making remote script sql_remote.sh executable"
-	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "chmod a+x ${REMOTE_EXEC_DIR}/sql_remote.sh" 
-	
 	trace validate_migration "Invoking remote script sql_remote.sh to verify our migration scripts against a short-lived copy of ${VALIDATE_MIGRATION_TEMPLATE_DB}."
 	trace validate_migration "=========================================================="
 
@@ -252,16 +249,10 @@ validate_migration()
 rollout_database()
 {
 	trace rollout_database BEGIN
-	
-	trace rollout_database "Making remote script sql_remote.sh executable"
-	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "chmod a+x ${REMOTE_EXEC_DIR}/sql_remote.sh" 
-	
+
 	trace rollout_database "Invoking remote script sql_remote.sh"
 	trace rollout_database "=========================================================="
-#	# Note: 
-#	#   the -tt is necessary because we might call sudo on the remote site and sudo requires a tty 
-#	#   Multiple -t options force tty allocation, even if ssh has no local tty.
-#	ssh -tt -p ${SSH_PORT} adempiere@${TARGET_HOST} "${REMOTE_EXEC_DIR}/sql_remote.sh" 
+
 	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/sql_remote.sh -d ${REMOTE_EXEC_DIR}/.." 
 	trace rollout_database "=========================================================="
 	trace rollout_database "Done with remote script sql_remote.sh"
@@ -291,7 +282,6 @@ clean_rollout_appserver()
 	
 	trace clean_rollout_appserver END
 }
-
 
 check_ssh()
 {
@@ -326,8 +316,8 @@ fi
 
 if [ "$START_STOP" = "true" ]; 
 then
-	trace $(basename $0) "Stopping remote metasfresh service"
-	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "service metasfresh_server stop" 
+	trace $(basename $0) "Stopping remote metasfresh or adempiere service"
+	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/stop_service.sh" 
 fi
 
 if [ "$DATABASE" == "true" ]; then
@@ -339,8 +329,8 @@ fi
 
 if [ "$START_STOP" = "true" ]; 
 then
-	trace $(basename $0) "Starting remote metasfresh service"
-	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "service metasfresh_server start" 
+	trace $(basename $0) "Starting remote metasfresh or adempiere service"
+	ssh -p ${SSH_PORT} ${TARGET_USER}@${TARGET_HOST} "${REMOTE_EXEC_DIR}/start_service.sh" 
 fi
 
 
