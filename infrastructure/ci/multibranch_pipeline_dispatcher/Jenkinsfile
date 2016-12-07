@@ -20,8 +20,10 @@ def invokeDownStreamJobs(String jobFolderName, String buildId, String upstreamBr
 		// Perhaps you forgot to surround the code with a step that provides this, such as: node
 		// ...
 		// org.jenkinsci.plugins.workflow.steps.MissingContextVariableException: Required context class hudson.FilePath is missing
-		
-		exitCode = sh returnStatus: true, script: "git ls-remote --exit-code https://github.com/metasfresh/${jobFolderName} ${upstreamBranch}"
+		withCredentials([usernameColonPassword(credentialsId: 'github_metas-dev-priv', variable: 'GIT_CREDENTIALS')]) 
+		{
+			exitCode = sh returnStatus: true, script: "git ls-remote --exit-code https://${GIT_CREDENTIALS}@github.com/metasfresh/${jobFolderName} ${upstreamBranch}"
+		}
 	}
 	if(exitCode == 0)
 	{
