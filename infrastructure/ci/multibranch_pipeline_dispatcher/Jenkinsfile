@@ -80,11 +80,8 @@ So if this is a "master" build, but it was invoked by a "feature-branch" build t
 
 timestamps 
 {
-node
-{
 stage("Trigger multibranch build")
 {
 	invokeDownStreamJobs(params.MF_PROJECT_NAME, params.MF_UPSTREAM_BUILDNO, params.MF_UPSTREAM_BRANCH, params.MF_METASFRESH_VERSION, false) // wait=false because we are only the dispatcher
 } // stage
-} // node
 } // timestamps
