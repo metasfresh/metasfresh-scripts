@@ -1,5 +1,5 @@
 
-The files is this folder belong into the folder `/opt/metasfresh-webui-frontend/scripts` on the target machine.
+The files in this folder belong into the folder `/opt/metasfresh-webui-frontend/scripts` on the target machine.
 They are invoked by an admin or by Jenkins to check out, build and install the latest version of the metasfresh webui frontend.
 
 Some of steps to prepare a machine to be able to build the webui frontend are:
