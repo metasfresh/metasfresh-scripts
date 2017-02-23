@@ -58,7 +58,7 @@ def updateMasterBranch(final String repoURL)
 			sh "git config credential.username ${env.GIT_USERNAME}";
 			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
 	   
-			// the --set-upstream is requiered for the first time that we push and doesn't hurt afterwards.
+			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
 			sh "GIT_ASKPASS=true git push --set-upstream origin master";
 		} 
 		finally 
