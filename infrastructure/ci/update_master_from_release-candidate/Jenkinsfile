@@ -49,7 +49,7 @@ def updateMasterBranch(final String repoURL)
 	git url: repoURL;
 
 	sh 'git checkout master'; // we assume the master branch exists. If not, that's a problem we want to know about
-	sh 'git merge release-candidate';
+	sh 'git merge origin/release-candidate';
 
 	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 	{
@@ -58,7 +58,8 @@ def updateMasterBranch(final String repoURL)
 			sh "git config credential.username ${env.GIT_USERNAME}";
 			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
 	   
-			sh "GIT_ASKPASS=true git push";
+			// the --set-upstream is requiered for the first time that we push and doesn't hurt afterwards.
+			sh "GIT_ASKPASS=true git push --set-upstream origin master";
 		} 
 		finally 
 		{
@@ -76,23 +77,23 @@ stage("Checkout repos")
     {
 		dir('metasfresh-parent') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-parent.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-parent.git';
 		}
 		dir('metasfresh') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh.git';
 		}
 		dir('metasfresh-webui') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui.git';
 		}
 		dir('metasfresh-webui-frontend') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
 		}
 		dir('metasfresh-procurement-webui') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
 		}	
 	}
 }
