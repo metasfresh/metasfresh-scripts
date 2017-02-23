@@ -31,8 +31,7 @@ git pull
 #git checkout $TEMP_CHANGESET
 
 #
-# Copy config.js and webpack.js
-cp -v $HOME_DIR/scripts/config_local.js $DIST_DIR/config.js
+# webpack.js
 cp -v $HOME_DIR/scripts/webpack.prod_local.js $REPO_DIR/webpack.prod.js
 
 #
@@ -46,6 +45,9 @@ echo Rebuilding $DIST_DIR ...
 rm -rfv $DIST_DIR
 webpack --config $REPO_DIR/webpack.prod.js
 
+#
+# copy vonfig.js
+cp -v $HOME_DIR/scripts/config_local.js $DIST_DIR/config.js
 
 #
 # Copy htaccess to dist folder
