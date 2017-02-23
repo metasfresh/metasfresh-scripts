@@ -5,7 +5,14 @@
 /**
  * This method will be used further down to call additional jobs such as metasfresh-procurement and metasfresh-webui
  */
-def invokeDownStreamJobs(String jobFolderName, String buildId, String upstreamBranch, String metasfreshVersion, boolean wait)
+def invokeDownStreamJobs(final String jobFolderName, 
+	final String buildId, 
+	final String upstreamBranch, 
+	final String metasfreshVersion,
+	final String metasfreshProcurementWebuiVersion,
+	final String metasfreshWebuiApiVersion,
+	final String metasfreshWebuiFrontendVersion
+	)
 {
 	echo "Invoking downstream job from folder=${jobFolderName} with preferred branch=${upstreamBranch}"
 	
@@ -52,8 +59,10 @@ def invokeDownStreamJobs(String jobFolderName, String buildId, String upstreamBr
 			string(name: 'MF_UPSTREAM_BRANCH', value: upstreamBranch),
 			string(name: 'MF_UPSTREAM_BUILDNO', value: buildId),
 			string(name: 'MF_METASFRESH_VERSION', value: metasfreshVersion),
-			booleanParam(name: 'MF_TRIGGER_DOWNSTREAM_BUILDS', value: false) // the job shall just run but not trigger further builds because we are doing all the orchestration
-		], wait: wait
+			string(name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION', value: metasfreshProcurementWebuiVersion),
+			string(name: 'MF_METASFRESH_WEBUI_API_VERSION', value: metasfreshWebuiApiVersion),
+			string(name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION', value: metasfreshWebuiFrontendVersion)
+		], wait: false
 }
 
 properties([
@@ -72,8 +81,17 @@ So if this is a "master" build, but it was invoked by a "feature-branch" build t
 			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
 			name: 'MF_METASFRESH_VERSION'),
 		string(defaultValue: '', 
+			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+			name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION'),
+		string(defaultValue: '', 
+			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+			name: 'MF_METASFRESH_WEBUI_API_VERSION'),
+		string(defaultValue: '', 
+			description: 'Version of the metasfresh-webui-frontend code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+			name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION'),
+		string(defaultValue: '', 
 			description: 'Project/job folder name to trigger', 
-			name: 'MF_PROJECT_NAME')
+			name: 'MF_PROJECT_NAME'),
 	]), 
 	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '100')) // keep the last 20 builds
 ])
@@ -82,6 +100,13 @@ timestamps
 {
 stage("Trigger multibranch build")
 {
-	invokeDownStreamJobs(params.MF_PROJECT_NAME, params.MF_UPSTREAM_BUILDNO, params.MF_UPSTREAM_BRANCH, params.MF_METASFRESH_VERSION, false) // wait=false because we are only the dispatcher
+	invokeDownStreamJobs(params.MF_PROJECT_NAME, 
+		params.MF_UPSTREAM_BUILDNO, 
+		params.MF_UPSTREAM_BRANCH, 
+		params.MF_METASFRESH_VERSION,
+		params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
+		params.MF_METASFRESH_WEBUI_API_VERSION,
+		params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
+		)
 } // stage
 } // timestamps
