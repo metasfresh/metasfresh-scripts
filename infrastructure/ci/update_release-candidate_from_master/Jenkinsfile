@@ -1,0 +1,100 @@
+#!/usr/bin/env groovy
+// the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
+// thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
+
+/*
+	Technical note:
+	Passing the jenkins credential to the gib invocations tunred out to be very hard for me.
+	Thx to http://stackoverflow.com/a/40038869/1012103 for this how to do it
+	
+	What did not work for me was http://stackoverflow.com/a/33630506/1012103 . It failed with
+<pre>	
+00:00:03.555 [metasfresh-parent] Running shell script
+00:00:03.838 + git push --set-upstream origin release-candidate https://****:****@github.com/metasfresh/metasfresh-parent.git
+00:00:03.839 error: src refspec https://**** does not match any.
+00:00:03.839 error: failed to push some refs to 'https://github.com/metasfresh/metasfresh-parent.git'
+</pre>
+
+	Also, using the ssh agent did not work for me. I created a keypair and added the public key to github.
+	There the output was
+<pre>	
+[Pipeline] sshagent
+00:00:00.094 [ssh-agent] Using credentials metas-dev (used to access githib as metas-dev via ssh-agent)
+00:00:00.095 [ssh-agent] Looking for ssh-agent implementation...
+00:00:00.506 [ssh-agent]   Exec ssh-agent (binary ssh-agent on a remote machine)
+00:00:00.517 $ ssh-agent
+00:00:00.564 SSH_AUTH_SOCK=/tmp/ssh-6fUQPRuNKrQX/agent.14666
+00:00:00.564 SSH_AGENT_PID=14668
+00:00:01.941 $ ssh-add /var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key
+00:00:01.955 Identity added: /var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key (/var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key)
+00:00:01.982 [ssh-agent] Started.
+[Pipeline] {
+[Pipeline] sh
+00:00:02.810 $ ssh-agent -k
+00:00:02.818 unset SSH_AUTH_SOCK;
+00:00:02.818 unset SSH_AGENT_PID;
+00:00:02.818 echo Agent pid 14668 killed;
+00:00:02.845 [ssh-agent] Stopped.
+00:00:02.093 [metasfresh-parent] Running shell script
+00:00:02.387 + git clone git@github.com:metasfresh/metasfresh-parent.git
+00:00:02.388 Cloning into 'metasfresh-parent'...
+00:00:02.747 Host key verification failed.
+00:00:02.748 fatal: Could not read from remote repository.
+</pre>	
+*/
+
+def updateReleaseCandidateBranch(final String repoURL)
+{
+	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
+	git url: repoURL;
+
+	sh 'git checkout -B release-candidate'; // -B: create or reset
+	sh 'git merge origin/master';
+
+	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
+	{
+		try 
+		{
+			sh "git config credential.username ${env.GIT_USERNAME}";
+			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+	   
+			// the --set-upstream is requiered for the first time that we push and doesn't hurt afterwards.
+			sh "GIT_ASKPASS=true git push --set-upstream origin release-candidate";
+		} 
+		finally 
+		{
+			sh "git config --unset credential.username";
+			sh "git config --unset credential.helper";
+		}
+	}
+}
+
+timestamps 
+{
+stage("Checkout repos")
+{
+    node('linux')
+    {
+		dir('metasfresh-parent') 
+		{
+			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-parent.git';
+		}
+		dir('metasfresh') 
+		{
+			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh.git';
+		}
+		dir('metasfresh-webui') 
+		{
+			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui.git';
+		}
+		dir('metasfresh-webui-frontend') 
+		{
+			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
+		}
+		dir('metasfresh-procurement-webui') 
+		{
+			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
+		}	
+	}
+}
+} // timestamps
