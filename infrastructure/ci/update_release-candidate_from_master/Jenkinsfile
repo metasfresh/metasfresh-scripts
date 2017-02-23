@@ -46,11 +46,15 @@
 def updateReleaseCandidateBranch(final String repoURL)
 {
 	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
-	git url: repoURL;
+	git branch: 'master', url: repoURL;
 
+	// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
+	final String tagName="${env.BUILD_TAG}"
+	sh "git tag ${tagName}";
+	
 	sh 'git checkout -B release-candidate'; // -B: create or reset
 	sh 'git merge origin/master';
-
+	
 	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 	{
 		try 
@@ -58,8 +62,11 @@ def updateReleaseCandidateBranch(final String repoURL)
 			sh "git config credential.username ${env.GIT_USERNAME}";
 			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
 	   
-			// the --set-upstream is requiered for the first time that we push and doesn't hurt afterwards.
+			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
 			sh "GIT_ASKPASS=true git push --set-upstream origin release-candidate";
+			
+			// also push the tag we created
+			sh "GIT_ASKPASS=true git push --tags";
 		} 
 		finally 
 		{
