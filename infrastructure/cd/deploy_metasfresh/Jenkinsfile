@@ -53,7 +53,10 @@ stage("Checkout repos")
 		final packaging='tar.gz';
 		final sshTargetUser=params.MF_TARGET_USER;
 		
-		sh "wget ${params.MF_ROLLOUT_FILE_URL}"
+		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+		{
+			sh "wget --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}"
+		}
 		
 		// extract the tar.gz
 		final fileAndDirName="${distArtifactId}-${BUILD_VERSION}-${classifier}"
