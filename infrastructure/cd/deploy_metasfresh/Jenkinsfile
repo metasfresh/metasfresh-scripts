@@ -44,8 +44,7 @@ def invokeRemote = { String sshTargetHost, String sshTargetUser, String director
 
 echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
 
-
-final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*content\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
+final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
 
 // note that urlMatcher[0][0] is the whole matched string
 final artifactRepoName = urlMatcher[0][1];
@@ -65,28 +64,30 @@ stage("Checkout repos")
 		final classifier='dist';
 		final packaging='tar.gz';
 		final sshTargetUser=params.MF_TARGET_USER;
-	
+
 		// extract the tar.gz
 		final deployDir="/home/${params.MF_TARGET_USER}/${artifactRepoName}-${fileNameWithoutExt}"
 
 		// Look Ma, I'm currying!!
 		final invokeRemoteInHomeDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "/home/${params.MF_TARGET_USER}");
-
+		invokeRemoteInHomeDir "mkdir -p ${deployDir}";
+		
+		final invokeRemoteInDeployDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}");
 		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')])
 		{
-			invokeRemoteInHomeDir("wget --no-verbose --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}");
+			invokeRemoteInDeployDir "wget --no-verbose --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}";
 		}
-		invokeRemoteInHomeDir("mkdir -p ${deployDir} && mv ${fileNameWithoutExt}.tar.gz ${deployDir} && cd ${deployDir} && tar -xf ${fileNameWithoutExt}.tar.gz")
+		invokeRemoteInDeployDir("tar -xf ${fileNameWithoutExt}.tar.gz")
 
 		// stop the service, perform the rollout and start the service
 		final invokeRemoteInInstallDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}/dist/install");
 		invokeRemoteInInstallDir('./stop_service.sh');
-		
+
 		if(params.MF_DATABASE) 
 		{ 
 			invokeRemoteInInstallDir('./sql_remote.sh');
 		}
-		
+
 		invokeRemoteInInstallDir('./minor_remote.sh');
 		invokeRemoteInInstallDir('./start_service.sh');
 
@@ -95,7 +96,7 @@ stage("Checkout repos")
 			// clean up what we just rolled out
 			invokeRemoteInHomeDir("rm -r ${deployDir}");
 		}
-		
+
 		// clean up the workspace, including the local maven repositories that the withMaven steps created
 		step([$class: 'WsCleanup', cleanWhenFailure: false]);
 	}
