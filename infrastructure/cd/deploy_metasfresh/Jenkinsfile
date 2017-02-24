@@ -1,0 +1,88 @@
+#!/usr/bin/env groovy
+// the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
+// thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
+
+// thx to http://stackoverflow.com/a/36949007/1012103 with respect to the parameters
+properties([
+	parameters([
+		string(defaultValue: '', 
+			description: 'URL of the tar.gz to roll out', 
+			name: 'MF_ROLLOUT_FILE_URL'),
+		string(defaultValue: '', 
+			description: 'Host to roll out to.', 
+			name: 'MF_TARGET_HOST'),
+		string(defaultValue: 'metasfresh',
+			description: 'Username to use when attempting to ssh to the MF_TARGET_HOST.', 
+			name: 'MF_TARGET_USER'),
+		booleanParam(defaultValue: true, 
+			description: 'Roll out sql migration scripts?',
+			name: 'MF_DATABASE'),
+		booleanParam(defaultValue: true, 
+			description: 'Delete the rollout-dir on the remote server after a successful rollout?',
+			name: 'MF_CLEAN_ROLLOUT_APPSERVER')
+	]),
+	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
+]);
+
+if(!params.MF_ROLLOUT_FILE_URL)
+{
+	error 'Missing MF_ROLLOUT_FILE_URL parameter';
+}
+if(!params.MF_TARGET_HOST)
+{
+	error 'Missing MF_TARGET_HOST parameter';
+}
+
+// we need this one for both "Test-SQL" and "Deployment
+def invokeRemote = { String sshTargetHost, String sshTargetUser, String directory, String shellScript -> 
+
+// no echo needed: the log already shows what's done via the sh step
+//	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
+//	echo "${shellScript}"
+	sh "ssh ${sshTargetUser}@${sshTargetHost} \"cd ${directory} && ${shellScript}\"" 
+}
+
+timestamps 
+{
+stage("Checkout repos")
+{
+    node('master')
+    {
+		final distArtifactId='de.metas.endcustomer.mf15.dist';
+		final classifier='dist';
+		final packaging='tar.gz';
+		final sshTargetUser=params.MF_TARGET_USER;
+		
+		sh "wget ${params.MF_ROLLOUT_FILE_URL}"
+		
+		// extract the tar.gz
+		final fileAndDirName="${distArtifactId}-${BUILD_VERSION}-${classifier}"
+		final deployDir="/home/${params.MF_TARGET_USER}/${fileAndDirName}-${MF_UPSTREAM_BRANCH}"
+
+		// Look Ma, I'm currying!!
+		final invokeRemoteInHomeDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "/home/${params.MF_TARGET_USER}");				
+		invokeRemoteInHomeDir("mkdir -p ${deployDir} && mv ${fileAndDirName}.${packaging} ${deployDir} && cd ${deployDir} && tar -xf ${fileAndDirName}.${packaging}")
+
+		// stop the service, perform the rollout and start the service
+		final invokeRemoteInInstallDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}/dist/install");
+		invokeRemoteInInstallDir('./stop_service.sh');
+		
+		if(params.MF_DATABASE) 
+		{ 
+			invokeRemoteInInstallDir('./sql_remote.sh'); 
+		}
+		
+		invokeRemoteInInstallDir('./minor_remote.sh');
+		invokeRemoteInInstallDir('./start_service.sh');
+
+		if(params.MF_CLEAN_ROLLOUT_APPSERVER)
+		{
+			// clean up what we just rolled out
+			invokeRemoteInHomeDir("rm -r ${deployDir}")
+		}
+		
+		// clean up the workspace, including the local maven repositories that the withMaven steps created
+		step([$class: 'WsCleanup', cleanWhenFailure: false]);
+	}
+}
+} // timestamps
