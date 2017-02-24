@@ -2,7 +2,7 @@
 // the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
 // thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
 
-// thx to http://stackoverflow.com/a/36949007/1012103 with respect to the parameters
+// thx to http://stackoverflow.com/a/36949007/1012103 with respect to the paramters
 properties([
 	parameters([
 		string(defaultValue: '', 
@@ -53,7 +53,7 @@ stage("Checkout repos")
 		final packaging='tar.gz';
 		final sshTargetUser=params.MF_TARGET_USER;
 		
-		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')]) {
+		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')])
 		{
 			sh "wget --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}"
 		}
