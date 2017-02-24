@@ -5,7 +5,7 @@ set -o errexit # exit if something fails
 set -o nounset # don't allow unset variables
 
 # initialize our artifact URL to the default
-ARTIFACT_URL='http://repo.metasfresh.com/service/local/artifact/maven/redirect?r=mvn-FRESH-112-releases&g=de.metas.ui.web&a=metasfresh-webui-api&v=LATEST'
+ARTIFACT_URL='http://repo.metasfresh.com/service/local/artifact/maven/redirect?r=mvn-master&g=de.metas.ui.web&a=metasfresh-webui-api&v=LATEST'
 
 #
 # to learn about getopts, see http://wiki.bash-hackers.org/howto/getopts_tutorial

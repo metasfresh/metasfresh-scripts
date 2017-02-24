@@ -37,8 +37,8 @@ if(!params.MF_TARGET_HOST)
 def invokeRemote = { String sshTargetHost, String sshTargetUser, String directory, String shellScript -> 
 
 // no echo needed: the log already shows what's done via the sh step
-	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
-	echo "${shellScript}"
+//	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
+//	echo "${shellScript}"
 	sh "ssh ${sshTargetUser}@${sshTargetHost} \"cd ${directory} && ${shellScript}\"" 
 }
 
