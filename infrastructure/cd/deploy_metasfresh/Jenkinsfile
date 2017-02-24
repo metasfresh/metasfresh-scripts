@@ -37,10 +37,23 @@ if(!params.MF_TARGET_HOST)
 def invokeRemote = { String sshTargetHost, String sshTargetUser, String directory, String shellScript -> 
 
 // no echo needed: the log already shows what's done via the sh step
-//	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
-//	echo "${shellScript}"
+	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
+	echo "${shellScript}"
 	sh "ssh ${sshTargetUser}@${sshTargetHost} \"cd ${directory} && ${shellScript}\"" 
 }
+
+echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
+
+
+final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*content\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
+
+// note that urlMatcher[0][0] is the whole matched string
+final artifactRepoName = urlMatcher[0][1];
+final fileNameWithoutExt = urlMatcher[0][2];
+urlMatcher = null; // see https://github.com/jenkinsci/pipeline-plugin/blob/master/TUTORIAL.md#serializing-local-variables
+
+echo "fileNameWithoutExt=${fileNameWithoutExt}";
+echo "artifactRepoName=${artifactRepoName}";
 
 timestamps 
 {
@@ -52,19 +65,18 @@ stage("Checkout repos")
 		final classifier='dist';
 		final packaging='tar.gz';
 		final sshTargetUser=params.MF_TARGET_USER;
-		
-		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')])
-		{
-			sh "wget --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}"
-		}
-		
+	
 		// extract the tar.gz
-		final fileAndDirName="${distArtifactId}-${BUILD_VERSION}-${classifier}"
-		final deployDir="/home/${params.MF_TARGET_USER}/${fileAndDirName}-${MF_UPSTREAM_BRANCH}"
+		final deployDir="/home/${params.MF_TARGET_USER}/${artifactRepoName}-${fileNameWithoutExt}"
 
 		// Look Ma, I'm currying!!
-		final invokeRemoteInHomeDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "/home/${params.MF_TARGET_USER}");				
-		invokeRemoteInHomeDir("mkdir -p ${deployDir} && mv ${fileAndDirName}.${packaging} ${deployDir} && cd ${deployDir} && tar -xf ${fileAndDirName}.${packaging}")
+		final invokeRemoteInHomeDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "/home/${params.MF_TARGET_USER}");
+
+		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')])
+		{
+			invokeRemoteInHomeDir("wget --no-verbose --user=${USERNAME} --password=${PASSWORD} ${params.MF_ROLLOUT_FILE_URL}");
+		}
+		invokeRemoteInHomeDir("mkdir -p ${deployDir} && mv ${fileNameWithoutExt}.tar.gz ${deployDir} && cd ${deployDir} && tar -xf ${fileNameWithoutExt}.tar.gz")
 
 		// stop the service, perform the rollout and start the service
 		final invokeRemoteInInstallDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}/dist/install");
@@ -72,7 +84,7 @@ stage("Checkout repos")
 		
 		if(params.MF_DATABASE) 
 		{ 
-			invokeRemoteInInstallDir('./sql_remote.sh'); 
+			invokeRemoteInInstallDir('./sql_remote.sh');
 		}
 		
 		invokeRemoteInInstallDir('./minor_remote.sh');
@@ -81,7 +93,7 @@ stage("Checkout repos")
 		if(params.MF_CLEAN_ROLLOUT_APPSERVER)
 		{
 			// clean up what we just rolled out
-			invokeRemoteInHomeDir("rm -r ${deployDir}")
+			invokeRemoteInHomeDir("rm -r ${deployDir}");
 		}
 		
 		// clean up the workspace, including the local maven repositories that the withMaven steps created
