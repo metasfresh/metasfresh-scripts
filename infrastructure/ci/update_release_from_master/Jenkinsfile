@@ -111,7 +111,11 @@ stage("Checkout repos")
 		dir('metasfresh-procurement-webui') 
 		{
 			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
-		}	
+		}
+		dir('metasfresh-dist') 
+		{
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-dist.git';
+		}
 	}
 }
 } // timestamps
