@@ -43,35 +43,40 @@
 </pre>	
 */
 
-def updateReleaseCandidateBranch(final String repoURL)
+def updateMasterBranch(final String repoURL)
 {
 	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
-	git branch: 'master', url: repoURL;
+	git url: repoURL;
 
-	// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
-	final String tagName="${env.BUILD_TAG}"
-	sh "git tag ${tagName}";
+	// i'm, not 100% sure what the git step does, so make sure that we have the latest of both the master and the release branch
+	// we assume the master and release branch exist. If not, that's a problem we need to know about, so it's fine if this job fails
+	sh 'git checkout release';
+	sh "git pull ${repoURL} release";
+
+	sh 'git checkout master';
+	sh "git pull ${repoURL} master";
 	
-	sh 'git checkout -B release-candidate'; // -B: create or reset
-	sh 'git merge origin/master';
-	
-	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
+	// thx to http://stackoverflow.com/questions/3696938/git-how-do-you-commit-code-as-a-different-user
+	// and http://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
+	withEnv(['GIT_COMMITTER_NAME="metas-dev"', 'GIT_COMMITTER_EMAIL="dev@metasfresh.com"']) 
 	{
-		try 
+		sh 'git merge origin/release';
+
+		withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 		{
-			sh "git config credential.username ${env.GIT_USERNAME}";
-			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
-	   
-			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
-			sh "GIT_ASKPASS=true git push --set-upstream origin release-candidate";
-			
-			// also push the tag we created
-			sh "GIT_ASKPASS=true git push --tags";
-		} 
-		finally 
-		{
-			sh "git config --unset credential.username";
-			sh "git config --unset credential.helper";
+			try 
+			{
+				sh "git config credential.username ${env.GIT_USERNAME}";
+				sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+
+				// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
+				sh "GIT_ASKPASS=true git push --set-upstream origin master";
+			} 
+			finally 
+			{
+				sh "git config --unset credential.username";
+				sh "git config --unset credential.helper";
+			}
 		}
 	}
 }
@@ -84,23 +89,23 @@ stage("Checkout repos")
     {
 		dir('metasfresh-parent') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-parent.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-parent.git';
 		}
 		dir('metasfresh') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh.git';
 		}
 		dir('metasfresh-webui') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui.git';
 		}
 		dir('metasfresh-webui-frontend') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
 		}
 		dir('metasfresh-procurement-webui') 
 		{
-			updateReleaseCandidateBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
 		}	
 	}
 }

@@ -10,7 +10,7 @@
 	What did not work for me was http://stackoverflow.com/a/33630506/1012103 . It failed with
 <pre>	
 00:00:03.555 [metasfresh-parent] Running shell script
-00:00:03.838 + git push --set-upstream origin release-candidate https://****:****@github.com/metasfresh/metasfresh-parent.git
+00:00:03.838 + git push --set-upstream origin release https://****:****@github.com/metasfresh/metasfresh-parent.git
 00:00:03.839 error: src refspec https://**** does not match any.
 00:00:03.839 error: failed to push some refs to 'https://github.com/metasfresh/metasfresh-parent.git'
 </pre>
@@ -25,8 +25,8 @@
 00:00:00.517 $ ssh-agent
 00:00:00.564 SSH_AUTH_SOCK=/tmp/ssh-6fUQPRuNKrQX/agent.14666
 00:00:00.564 SSH_AGENT_PID=14668
-00:00:01.941 $ ssh-add /var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key
-00:00:01.955 Identity added: /var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key (/var/lib/jenkins/workspace/maintain_release-candidate_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key)
+00:00:01.941 $ ssh-add /var/lib/jenkins/workspace/maintain_release_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key
+00:00:01.955 Identity added: /var/lib/jenkins/workspace/maintain_release_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key (/var/lib/jenkins/workspace/maintain_release_branch/metasfresh-parent@tmp/private_key_2720204789783443436.key)
 00:00:01.982 [ssh-agent] Started.
 [Pipeline] {
 [Pipeline] sh
@@ -43,28 +43,41 @@
 </pre>	
 */
 
-def updateMasterBranch(final String repoURL)
+def updateReleaseBranch(final String repoURL)
 {
 	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
-	git url: repoURL;
+	git branch: 'master', url: repoURL;
 
-	sh 'git checkout master'; // we assume the master branch exists. If not, that's a problem we want to know about
-	sh 'git merge origin/release-candidate';
-
-	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
+	// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
+	final String tagName="${env.BUILD_TAG}"
+	sh "git tag ${tagName}";
+	
+	sh 'git checkout -B release'; // -B: create or reset
+	
+	// thx to http://stackoverflow.com/questions/3696938/git-how-do-you-commit-code-as-a-different-user
+	// and http://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
+	withEnv(['GIT_COMMITTER_NAME="metas-dev"', 'GIT_COMMITTER_EMAIL="dev@metasfresh.com"']) 
 	{
-		try 
+	sh 'git merge origin/master';
+
+		withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 		{
-			sh "git config credential.username ${env.GIT_USERNAME}";
-			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
-	   
-			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
-			sh "GIT_ASKPASS=true git push --set-upstream origin master";
-		} 
-		finally 
-		{
-			sh "git config --unset credential.username";
-			sh "git config --unset credential.helper";
+			try 
+			{
+				sh "git config credential.username ${env.GIT_USERNAME}";
+				sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+		   
+				// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
+				sh "GIT_ASKPASS=true git push --set-upstream origin release";
+				
+				// also push the tag we created
+				sh "GIT_ASKPASS=true git push --tags";
+			} 
+			finally 
+			{
+				sh "git config --unset credential.username";
+				sh "git config --unset credential.helper";
+			}
 		}
 	}
 }
@@ -77,23 +90,23 @@ stage("Checkout repos")
     {
 		dir('metasfresh-parent') 
 		{
-			updateMasterBranch 'https://github.com/metasfresh/metasfresh-parent.git';
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-parent.git';
 		}
 		dir('metasfresh') 
 		{
-			updateMasterBranch 'https://github.com/metasfresh/metasfresh.git';
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh.git';
 		}
 		dir('metasfresh-webui') 
 		{
-			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui.git';
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-webui.git';
 		}
 		dir('metasfresh-webui-frontend') 
 		{
-			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
 		}
 		dir('metasfresh-procurement-webui') 
 		{
-			updateMasterBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
 		}	
 	}
 }
