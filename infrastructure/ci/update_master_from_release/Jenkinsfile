@@ -6,9 +6,9 @@
 	Technical note:
 	Passing the jenkins credential to the gib invocations tunred out to be very hard for me.
 	Thx to http://stackoverflow.com/a/40038869/1012103 for this how to do it
-	
+
 	What did not work for me was http://stackoverflow.com/a/33630506/1012103 . It failed with
-<pre>	
+<pre>
 00:00:03.555 [metasfresh-parent] Running shell script
 00:00:03.838 + git push --set-upstream origin release-candidate https://****:****@github.com/metasfresh/metasfresh-parent.git
 00:00:03.839 error: src refspec https://**** does not match any.
@@ -17,7 +17,7 @@
 
 	Also, using the ssh agent did not work for me. I created a keypair and added the public key to github.
 	There the output was
-<pre>	
+<pre>
 [Pipeline] sshagent
 00:00:00.094 [ssh-agent] Using credentials metas-dev (used to access githib as metas-dev via ssh-agent)
 00:00:00.095 [ssh-agent] Looking for ssh-agent implementation...
@@ -40,7 +40,7 @@
 00:00:02.388 Cloning into 'metasfresh-parent'...
 00:00:02.747 Host key verification failed.
 00:00:02.748 fatal: Could not read from remote repository.
-</pre>	
+</pre>
 */
 
 def updateMasterBranch(final String repoURL)
@@ -55,61 +55,63 @@ def updateMasterBranch(final String repoURL)
 
 	sh 'git checkout master';
 	sh "git pull ${repoURL} master";
-	
-	// thx to http://stackoverflow.com/questions/3696938/git-how-do-you-commit-code-as-a-different-user
-	// and http://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
-	withEnv(['GIT_COMMITTER_NAME="metas-dev"', 'GIT_COMMITTER_EMAIL="dev@metasfresh.com"']) 
+
+	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 	{
-		sh 'git merge origin/release';
-
-		withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
+		try
 		{
-			try 
-			{
-				sh "git config credential.username ${env.GIT_USERNAME}";
-				sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+			sh 'git config user.email "dev@metasfresh.com"'
+			sh "git config user.name \"${GIT_USERNAME}\""
 
-				// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
-				sh "GIT_ASKPASS=true git push --set-upstream origin master";
-			} 
-			finally 
-			{
-				sh "git config --unset credential.username";
-				sh "git config --unset credential.helper";
-			}
+			sh "git config credential.username \"${GIT_USERNAME}\"";
+			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+
+			sh 'git merge origin/release';
+
+			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
+			sh "GIT_ASKPASS=true git push --set-upstream origin master";
+		}
+		finally
+		{
+			sh "git config --unset credential.username";
+			sh "git config --unset credential.helper";
 		}
 	}
 }
 
-timestamps 
+timestamps
 {
 stage("Checkout repos")
 {
     node('linux')
     {
-		dir('metasfresh-parent') 
+		dir('metasfresh-parent')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh-parent.git';
 		}
-		dir('metasfresh') 
+		dir('metasfresh')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh.git';
 		}
-		dir('metasfresh-webui') 
+		dir('metasfresh-webui')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui.git';
 		}
-		dir('metasfresh-webui-frontend') 
+		dir('metasfresh-webui-frontend')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh-webui-frontend.git';
 		}
-		dir('metasfresh-procurement-webui') 
+		dir('metasfresh-procurement-webui')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh-procurement-webui.git';
 		}
-		dir('metasfresh-dist') 
+		dir('metasfresh-dist')
 		{
 			updateMasterBranch 'https://github.com/metasfresh/metasfresh-dist.git';
+		}
+		dir('metasfresh-dist-orgs')
+		{
+			updateMasterBranch 'https://github.com/metasfresh/metasfresh-dist-orgs.git';
 		}
 	}
 }
