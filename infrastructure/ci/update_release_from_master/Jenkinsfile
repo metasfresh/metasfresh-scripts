@@ -45,6 +45,8 @@
 
 def updateReleaseBranch(final String repoURL)
 {
+		echo "BEGIN updateReleaseBranch with repoURL=${repoURL}";
+
 		// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
 		git branch: 'master', url: repoURL;
 
@@ -64,24 +66,28 @@ def updateReleaseBranch(final String repoURL)
 				sh "git config user.name \"${GIT_USERNAME}\""
 
 				sh "git config credential.username ${GIT_USERNAME}";
-				sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+				sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
 
 				// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
-				sh "GIT_ASKPASS=true git push --set-upstream origin release";
+				sh 'GIT_ASKPASS=true git push --set-upstream origin release';
 
 				// also push the tag we created
-				sh "GIT_ASKPASS=true git push --tags";
+				sh 'GIT_ASKPASS=true git push --tags';
+
+				// append tag info to the build description
+				currentBuild.description="""${currentBuild.description}
+				<br/>tagged ${repoURL} with tag ${tagName}."""
 			}
 			finally
 			{
+				echo "IN FINALLY BLOCK";
+				env.GIT_PASSWORD='';
 				sh "git config --unset credential.username";
 				sh "git config --unset credential.helper";
 			}
 		}
 
-		// append tag info to the build description
-		currentBuild.description="""${currentBuild.description}
-<br/>tagged ${repoURL} with tag ${tagName}."""
+		echo "END updateReleaseBranch with repoURL=${repoURL}";
 }
 
 currentBuild.description="";
