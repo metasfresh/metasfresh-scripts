@@ -45,41 +45,41 @@
 
 def updateMasterBranch(final String repoURL)
 {
+	echo "BEGIN updateMasterBranch with repoURL=${repoURL}";
+
 	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
-	git url: repoURL;
+	git branch: 'release', url: repoURL;
 
-	// i'm, not 100% sure what the git step does, so make sure that we have the latest of both the master and the release branch
-	// we assume the master and release branch exist. If not, that's a problem we need to know about, so it's fine if this job fails
-	sh 'git checkout release';
-	sh "git pull ${repoURL} release";
-
-	sh 'git checkout master';
-	sh "git pull ${repoURL} master";
+	sh 'git checkout -B master'; // -B: create or reset
+	sh "git pull ${repoURL} master" // just to be sure that we really have the latest master..not sure if this is neccesary
 
 	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 	{
+		boolean success = false;
 		try
 		{
-			env.GIT_PASSWORD=${GIT_PASSWORD};
-
 			sh 'git config user.email "dev@metasfresh.com"'
 			sh "git config user.name \"${GIT_USERNAME}\""
 
-			sh "git config credential.username \"${GIT_USERNAME}\"";
+			sh "git config credential.username ${GIT_USERNAME}";
 			sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
 
 			sh 'git merge origin/release';
 
 			// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
 			sh "GIT_ASKPASS=true git push --set-upstream origin master";
+			success = true;
 		}
 		finally
 		{
+			// cleanup
+			echo "IN FINALLY BLOCK (success=${success})";
 			env.GIT_PASSWORD='';
 			sh "git config --unset credential.username";
 			sh "git config --unset credential.helper";
 		}
 	}
+	echo "END updateMasterBranch with repoURL=${repoURL}";
 }
 
 timestamps

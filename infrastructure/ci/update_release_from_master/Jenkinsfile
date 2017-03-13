@@ -55,11 +55,11 @@ def updateReleaseBranch(final String repoURL)
 		sh "git tag ${tagName}";
 
 		sh 'git checkout -B release'; // -B: create or reset
-
-		sh 'git merge origin/master';
+		sh "git pull ${repoURL} release" // just to be sure that we really have the latest master..not sure if this is neccesary
 
 		withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 		{
+			boolean success = false;
 			try
 			{
 				sh 'git config user.email "dev@metasfresh.com"'
@@ -67,6 +67,8 @@ def updateReleaseBranch(final String repoURL)
 
 				sh "git config credential.username ${GIT_USERNAME}";
 				sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
+
+				sh 'git merge origin/master';
 
 				// the --set-upstream is required for the first time that we push and doesn't hurt afterwards.
 				sh 'GIT_ASKPASS=true git push --set-upstream origin release';
@@ -77,10 +79,12 @@ def updateReleaseBranch(final String repoURL)
 				// append tag info to the build description
 				currentBuild.description="""${currentBuild.description}
 				<br/>tagged ${repoURL} with tag ${tagName}."""
+				success = true;
 			}
 			finally
 			{
-				echo "IN FINALLY BLOCK";
+				// cleanup
+				echo "IN FINALLY BLOCK (success=${success})";
 				env.GIT_PASSWORD='';
 				sh "git config --unset credential.username";
 				sh "git config --unset credential.helper";
