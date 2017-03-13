@@ -22,11 +22,13 @@ properties([
 			name: 'MF_CLEAN_ROLLOUT_APPSERVER'),
 
 			// see https://github.com/metasfresh/metasfresh-scripts/issues/2
-			// thx to https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
-		[$class: 'WReadonlyStringParameterDefinition',
+			// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
+			// but the parameter was editable none the less
+		  // [$class: 'WReadonlyStringParameterDefinition',
+		string(
 			defaultValue: '',
 			description: 'URL of the build this deploy war triggered from (if any).',
-			name: 'MF_UPSTREAM_BUILD_URL']
+			name: 'MF_UPSTREAM_BUILD_URL')//]
 	]),
 	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
 ]);
