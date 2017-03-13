@@ -60,11 +60,13 @@ def updateMasterBranch(final String repoURL)
 	{
 		try
 		{
+			env.GIT_PASSWORD=${GIT_PASSWORD};
+
 			sh 'git config user.email "dev@metasfresh.com"'
 			sh "git config user.name \"${GIT_USERNAME}\""
 
 			sh "git config credential.username \"${GIT_USERNAME}\"";
-			sh "git config credential.helper '!echo password=\$GIT_PASSWORD; echo'";
+			sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
 
 			sh 'git merge origin/release';
 
@@ -73,6 +75,7 @@ def updateMasterBranch(final String repoURL)
 		}
 		finally
 		{
+			env.GIT_PASSWORD='';
 			sh "git config --unset credential.username";
 			sh "git config --unset credential.helper";
 		}
