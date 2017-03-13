@@ -5,24 +5,32 @@
 // thx to http://stackoverflow.com/a/36949007/1012103 with respect to the paramters
 properties([
 	parameters([
-		string(defaultValue: '', 
-			description: 'URL of the tar.gz to roll out', 
+		string(defaultValue: '',
+			description: 'URL of the tar.gz to roll out',
 			name: 'MF_ROLLOUT_FILE_URL'),
-		string(defaultValue: '', 
-			description: 'Host to roll out to.', 
+		string(defaultValue: '',
+			description: 'Host to roll out to.',
 			name: 'MF_TARGET_HOST'),
 		string(defaultValue: 'metasfresh',
-			description: 'Username to use when attempting to ssh to the MF_TARGET_HOST.', 
+			description: 'Username to use when attempting to ssh to the MF_TARGET_HOST.',
 			name: 'MF_TARGET_USER'),
-		booleanParam(defaultValue: true, 
+		booleanParam(defaultValue: true,
 			description: 'Roll out sql migration scripts?',
 			name: 'MF_DATABASE'),
-		booleanParam(defaultValue: true, 
+		booleanParam(defaultValue: true,
 			description: 'Delete the rollout-dir on the remote server after a successful rollout?',
-			name: 'MF_CLEAN_ROLLOUT_APPSERVER')
+			name: 'MF_CLEAN_ROLLOUT_APPSERVER'),
+
+			// see https://github.com/metasfresh/metasfresh-scripts/issues/2
+			// thx to https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
+		[$class: 'WReadonlyStringParameterDefinition',
+			defaultValue: '',
+			description: 'URL of the build this deploy war triggered from (if any).',
+			name: 'MF_UPSTREAM_BUILD_URL']
 	]),
 	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
 ]);
+
 
 if(!params.MF_ROLLOUT_FILE_URL)
 {
@@ -34,12 +42,12 @@ if(!params.MF_TARGET_HOST)
 }
 
 // we need this one for both "Test-SQL" and "Deployment
-def invokeRemote = { String sshTargetHost, String sshTargetUser, String directory, String shellScript -> 
+def invokeRemote = { String sshTargetHost, String sshTargetUser, String directory, String shellScript ->
 
 // no echo needed: the log already shows what's done via the sh step
 //	echo "Going to invoke the following as user ${sshTargetUser} on host ${sshTargetHost} in directory ${directory}:";
 //	echo "${shellScript}"
-	sh "ssh ${sshTargetUser}@${sshTargetHost} \"cd ${directory} && ${shellScript}\"" 
+	sh "ssh ${sshTargetUser}@${sshTargetHost} \"cd ${directory} && ${shellScript}\""
 }
 
 echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
@@ -54,9 +62,20 @@ urlMatcher = null; // see https://github.com/jenkinsci/pipeline-plugin/blob/mast
 echo "fileNameWithoutExt=${fileNameWithoutExt}";
 echo "artifactRepoName=${artifactRepoName}";
 
-timestamps 
+final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)";
+
+currentBuild.description="""
+<h3>Deployment infos</h3>
+<ul>
+	<li>Called from build job: <b>${upstreamBuildURL}</b></li>
+	<li>Rollout to server: <b>${params.MF_TARGET_HOST}</b></li>
+	<li>Rollout artifact URL: <b><a href='${MF_ROLLOUT_FILE_URL}'>${MF_ROLLOUT_FILE_URL}</a></b></li>
+</ul>
+""";
+
+timestamps
 {
-stage("Checkout repos")
+stage("Perform rollout")
 {
     node('master')
     {
@@ -71,7 +90,7 @@ stage("Checkout repos")
 		// Look Ma, I'm currying!!
 		final invokeRemoteInHomeDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "/home/${params.MF_TARGET_USER}");
 		invokeRemoteInHomeDir "mkdir -p ${deployDir}";
-		
+
 		final invokeRemoteInDeployDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}");
 		withCredentials([usernamePassword(credentialsId: 'nexus_jenkins', passwordVariable: 'PASSWORD', usernameVariable: 'USERNAME')])
 		{
@@ -83,8 +102,8 @@ stage("Checkout repos")
 		final invokeRemoteInInstallDir = invokeRemote.curry(params.MF_TARGET_HOST, params.MF_TARGET_USER, "${deployDir}/dist/install");
 		invokeRemoteInInstallDir('./stop_service.sh');
 
-		if(params.MF_DATABASE) 
-		{ 
+		if(params.MF_DATABASE)
+		{
 			invokeRemoteInInstallDir('./sql_remote.sh');
 		}
 
