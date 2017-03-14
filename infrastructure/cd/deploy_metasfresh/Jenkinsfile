@@ -69,8 +69,8 @@ final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)
 currentBuild.description="""
 <h3>Deployment infos</h3>
 <ul>
-	<li>Called from build job: <b>${upstreamBuildURL}</b></li>
-	<li>Rollout to server: <b>${params.MF_TARGET_HOST}</b></li>
+	<li>Called from build job URL: <b><a href='${upstreamBuildURL}'>${upstreamBuildURL}</a></b></li>
+	<li>Rollout to server hostname: <b>${params.MF_TARGET_HOST}</b></li>
 	<li>Rollout artifact URL: <b><a href='${MF_ROLLOUT_FILE_URL}'>${MF_ROLLOUT_FILE_URL}</a></b></li>
 </ul>
 """;
