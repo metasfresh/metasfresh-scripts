@@ -50,13 +50,6 @@ def updateReleaseBranch(final String repoURL)
 		// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
 		git branch: 'master', url: repoURL;
 
-		// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
-		final String tagName="${env.BUILD_TAG}"
-		sh "git tag ${tagName}";
-
-		sh 'git checkout -B release'; // -B: create or reset
-		sh "git pull ${repoURL} release" // just to be sure that we really have the latest master..not sure if this is neccesary
-
 		withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 		{
 			boolean success = false;
@@ -67,6 +60,13 @@ def updateReleaseBranch(final String repoURL)
 
 				sh "git config credential.username ${GIT_USERNAME}";
 				sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
+			
+				// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
+				final String tagName="${env.BUILD_TAG}"
+				sh "git tag ${tagName}";
+
+				sh 'git checkout -B release'; // -B: create or reset
+				sh "git pull ${repoURL} release" // just to be sure that we really have the latest master..not sure if this is neccesary
 
 				sh 'git merge origin/master';
 

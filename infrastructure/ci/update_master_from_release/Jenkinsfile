@@ -50,9 +50,6 @@ def updateMasterBranch(final String repoURL)
 	// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
 	git branch: 'release', url: repoURL;
 
-	sh 'git checkout -B master'; // -B: create or reset
-	sh "git pull ${repoURL} master" // just to be sure that we really have the latest master..not sure if this is neccesary
-
 	withCredentials([usernamePassword(credentialsId: 'github_metas-dev', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')])
 	{
 		boolean success = false;
@@ -63,6 +60,9 @@ def updateMasterBranch(final String repoURL)
 
 			sh "git config credential.username ${GIT_USERNAME}";
 			sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
+
+			sh 'git checkout -B master'; // -B: create or reset
+			sh "git pull ${repoURL} master" // just to be sure that we really have the latest master..not sure if this is neccesary
 
 			sh 'git merge origin/release';
 
