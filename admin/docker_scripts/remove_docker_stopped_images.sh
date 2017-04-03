@@ -8,7 +8,7 @@
 #                       by design.
 #
 #author          :julian.bischof@metasfresh.com
-#date            :2017-04-27
+#date            :2017-04-03
 #usage           :./remove_docker_stopped_images.sh [--force]
 #==============================================================================
 
