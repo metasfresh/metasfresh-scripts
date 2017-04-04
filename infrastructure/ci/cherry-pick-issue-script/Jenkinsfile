@@ -1,0 +1,167 @@
+#!/usr/bin/env groovy
+// the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
+// thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
+
+import groovy.json.JsonSlurper;
+
+//final MF_ISSUE_REPOSITORY='metasfresh-webui-api';
+//final MF_ISSUE_NUMBER='264';
+//final MF_TARGET_BRANCH='test';
+
+properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false], parameters([string(defaultValue: 'metasfresh', description: '', name: 'MF_ISSUE_REPOSITORY'), string(defaultValue: '', description: '', name: 'MF_ISSUE_NUMBER'), string(defaultValue: 'stable', description: '', name: 'MF_TARGET_BRANCH')]), pipelineTriggers([])])
+
+Map retrieveCommits(final String eventsURLString)
+{
+  echo "eventsURLString=${eventsURLString}";
+
+  // get a JSON containing all events about this issue from github
+  // see https://developer.github.com/v3/issues/events/
+  final apiUrl = new URL(eventsURLString)
+  final HttpURLConnection connection = apiUrl.openConnection();
+  final List eventsJson = new JsonSlurper().parse(new InputStreamReader(connection.getInputStream(), "UTF-8"));
+
+  // echo "Number of events: ${eventsJson.size()}"
+
+  final commits = [:];
+
+  for (event in eventsJson)
+  {
+    if(!event.commit_url)
+    {
+      continue;
+    }
+    // echo "event.commit_url=${event.commit_url}";
+
+    final commitUrl = new URL(event.commit_url)
+    final HttpURLConnection commitConnection = commitUrl.openConnection();
+    final Map commitJson = new JsonSlurper().parse(new InputStreamReader(commitConnection.getInputStream(), "UTF-8"));
+
+    // echo "commitJson.files.size()=${commitJson.files.size()}";
+    // echo "commitJson.files[0].filename=${commitJson.files[0].filename}";
+    // echo "commitJson.files=${commitJson.files}";
+
+    if(commitJson.files.size() == 1 && 'ReleaseNotes.md'.equalsIgnoreCase(commitJson.files[0].filename) )
+    {
+      echo "Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file";
+      continue;
+    }
+
+    // example:
+    // "commit_url": "https://api.github.com/repos/metasfresh/metasfresh/commits/bc63a377a74ad44ed1d9e87cb1da75158f18a5d0",
+    final matchGroup = (event.commit_url =~ /https:\/\/api.github.com\/repos\/metasfresh\/([^ ]+)\/commits\/([a-z0-9]+)/);
+    // echo "hasGroup=${matchGroup.hasGroup()}";
+    // echo "size=${matchGroup.size()}";
+
+    // echo "matchGroup[0][0]=${matchGroup[0][0]}";
+    //echo "repo name (matchGroup[0][1]): ${matchGroup[0][1]}";
+    //echo "commit sha1 (matchGroup[0][2]): ${matchGroup[0][2]}";
+
+    final String repoName=matchGroup[0][1];
+    final String sha1=matchGroup[0][2];
+
+    if(commits[repoName])
+    {
+      //echo "Adding sha1=${sha1} to repoName=${repoName}";
+      commits[repoName].add(sha1);
+    }
+    else
+    {
+      //echo "Creating new list with sha1=${sha1} for repoName=${repoName}";
+      commits[repoName] = [sha1];
+    }
+  }
+  // echo "commits=${commits}";
+  return commits;
+}
+
+timestamps
+{
+echo "getting a node to write a file"
+node('linux')
+{
+
+  final eventsURLString = "https://api.github.com/repos/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}/events";
+  final Map commits = retrieveCommits(eventsURLString);
+
+final List shellCommands = [];
+
+// IMPORTANT: commits.each { commit -> ... } does not work within the pipeline.
+// See http://stackoverflow.com/questions/40159258/impossibility-to-iterate-over-a-map-using-groovy-within-jenkins-pipeline
+for (commit in commits)
+{
+  final repoName = commit.key;
+  echo "Making commands for repoName=${repoName}";
+
+  shellCommands.add('echo \'REPOS_DIR=${REPOS_DIR}\'');
+
+  shellCommands.add('');
+  shellCommands.add('echo \'#########################\'');
+  shellCommands.add("echo '# Repository ${repoName}'");
+  shellCommands.add('echo \'#########################\'');
+
+  shellCommands.add('cd ${REPOS_DIR}'+"/${repoName}");
+
+  shellCommands.add('');
+  shellCommands.add("# get the target branch's latest version")
+  shellCommands.add("git checkout ${MF_TARGET_BRANCH} && git pull");
+
+  final cherryPickingBranch = "cp-gh${MF_ISSUE_NUMBER}-${MF_ISSUE_REPOSITORY}-to-${MF_TARGET_BRANCH}";
+  shellCommands.add('');
+  shellCommands.add("# create (or reset) a cherry-picking branch to make it easier to discard a failed cp");
+  shellCommands.add("git checkout -B ${cherryPickingBranch}");
+
+  shellCommands.add('');
+  shellCommands.add('# perform the actual cherry-picking');
+  final sha1s = commit.value;
+  for(sha1 in sha1s)
+  {
+    final cherryPickCmd = "git cherry-pick -x ${sha1}";
+    shellCommands.add(cherryPickCmd);
+  }
+
+  shellCommands.add('');
+  shellCommands.add('# merge the result into the target branch');
+  shellCommands.add("git checkout ${MF_TARGET_BRANCH}");
+  shellCommands.add("git merge ${cherryPickingBranch}");
+}
+//echo "shellCommands=${shellCommands}";
+//final cherryPickShellCmd = "cd \$\{REPOS_DIR\}/${repoName} && git cherry-pick -x ${changeSet}"
+
+//final Map repoName2sha1s = commits.groupBy(commit -> commit.repoName);
+//echo "repoName2sha1s=$repoName2sha1s";
+
+def shellCommandsFullstring = "";
+for (shellCommand in shellCommands)
+{
+  shellCommandsFullstring = shellCommandsFullstring + """
+${shellCommand}""";
+}
+
+echo "Setting current build's description";
+currentBuild.description="""To perform the cherry-picking of issue <a href='https://github.com/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}'>metasfresh/${MF_ISSUE_REPOSITORY}#${MF_ISSUE_NUMBER}</a> into target branch <code>${MF_TARGET_BRANCH}</code>,
+the shellcreated by this jobs can be run.
+""";
+
+echo "Preparing script file string";
+def scriptFileFullString = """
+#!/bin/bash
+set -o errexit # stop on error
+set -o nounset # don't allow unset variables
+
+${shellCommandsFullstring}
+""";
+
+
+
+// also create and archive a shell script file that we can use
+  echo "Setting script file name";
+  final scriptFileName="cherrypick_issue_${MF_ISSUE_REPOSITORY}_${MF_ISSUE_NUMBER}_to_${MF_TARGET_BRANCH}.sh";
+
+  echo "Writing shell script to file ${scriptFileName}"
+  writeFile file: scriptFileName, text: scriptFileFullString;
+
+  echo "Archiving script file ${scriptFileName}"
+  archiveArtifacts artifacts: scriptFileName;
+} // node
+echo "done";
+} // timestamps
