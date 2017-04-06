@@ -45,16 +45,16 @@ Map retrieveCommits(final String eventsURLString)
 
     if(commitJson.files.size() == 1 && 'ReleaseNotes.md'.equalsIgnoreCase(commitJson.files[0].filename) )
     {
-      echo "Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file.";
-      echo """Note: the message of that commit starts with (first 50 chars):
+      echo """Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file.
+Note: the message of that commit starts with (first 50 chars):
 ${commitJson.commit.message.take(50)}...""";
       continue;
     }
 
     if(commitJson.parents.size() > 1)
     {
-      echo "Skipping commit ${event.commit_url} because it has two parents (i.e. looks like a merge).";
-      echo """Note: the message of that commit starts with (first 50 chars):
+      echo """Skipping commit ${event.commit_url} because it has two parents (i.e. looks like a merge).
+Note: the message of that commit starts with (first 50 chars):
 ${commitJson.commit.message.take(50)}...""";
       continue;
     }
@@ -126,8 +126,8 @@ timestamps
       final sha1AndCommitURLs = commit.value;
       for(sha1AndCommitURL in sha1AndCommitURLs)
       {
-        final cherryPickCmd = "git cherry-pick -x ${sha1AndCommitURL.key} # ${sha1AndCommitURL.value}";
-        //final cherryPickCmd = "git cherry-pick -x ${sha1AndCommitURL.key}";
+        //final cherryPickCmd = "git cherry-pick -x ${sha1AndCommitURL.key} # ${sha1AndCommitURL.value}";
+        final cherryPickCmd = "cherrypick_if_not_yet_applied ${sha1AndCommitURL.key} # ${sha1AndCommitURL.value}";
         shellCommands.add(cherryPickCmd);
       }
 
@@ -142,16 +142,42 @@ timestamps
     for (shellCommand in shellCommands)
     {
       shellCommandsFullstring = shellCommandsFullstring + """
-      ${shellCommand}""";
+${shellCommand}""";
     }
 
     echo "Preparing script file string";
-    def scriptFileFullString = """
-    #!/bin/bash
-    set -o errexit # stop on error
-    set -o nounset # don't allow unset variables
 
-    ${shellCommandsFullstring}
+    final String scriptFileStaticHeader = '''#!/bin/bash
+set -e # stop on error
+set -u # don't allow unset variables
+
+#
+# Uses git cherry to find out if the given changeset was already applied. If not ithe function cherry-picks it.
+# Thx to http://gitready.com/intermediate/2009/04/16/find-unmerged-commits.html
+# Further reading: https://git-scm.com/docs/git-cherry
+#
+cherrypick_if_not_yet_applied()
+{
+  local sha1=$1
+
+  set +e # temporarily allow not 0 exit codes
+  git cherry ''' + MF_TARGET_BRANCH + ''' $sha1 | grep $sha1#
+  local grep_exit_code=$?
+  set -e
+
+  # thx to http://bencane.com/2014/09/02/understanding-exit-codes-and-how-to-use-them-in-bash-scripts/
+  if [ $grep_exit_code -eq 0 ]
+  then
+    echo "Cherry-picking changeset with sha1=$sha1"
+    git cherry-pick -x $sha1
+  else
+    echo "changeset with sha1=$sha1 was already applied; skipping it"
+  fi
+}''';
+
+    def scriptFileFullString = """${scriptFileStaticHeader}
+
+${shellCommandsFullstring}
     """;
 
     echo "Setting script file name";
