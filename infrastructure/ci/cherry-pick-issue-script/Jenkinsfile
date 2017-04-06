@@ -189,7 +189,12 @@ ${shellCommandsFullstring}
     echo "Archiving script file ${scriptFileName}"
     archiveArtifacts artifacts: scriptFileName;
 
-    echo "Setting current build's description";
+    /////////////////////
+    echo "Setting current build's title and description";
+    final String issueTitle = "${MF_ISSUE_REPOSITORY}#${MF_ISSUE_NUMBER}";
+
+    currentBuild.displayName = "${currentBuild.displayName} - ${issueTitle}";
+
     def descriptionURLsFullString = ''
     for (commit in commits)
     {
@@ -207,7 +212,7 @@ ${shellCommandsFullstring}
       descriptionURLsFullString = descriptionURLsFullString + "</ul>";
     }
 
-    currentBuild.description="""To perform the cherry-picking of issue <a href='https://github.com/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}'>metasfresh/${MF_ISSUE_REPOSITORY}#${MF_ISSUE_NUMBER}</a> into target branch <code>${MF_TARGET_BRANCH}</code>,
+    currentBuild.description="""To perform the cherry-picking of issue <a href='https://github.com/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}'>metasfresh/${issueTitle}</a> into target branch <code>${MF_TARGET_BRANCH}</code>,
     the shell script created by this jobs can be run.
     It would cherry-pick the following commits:
     <p/>
