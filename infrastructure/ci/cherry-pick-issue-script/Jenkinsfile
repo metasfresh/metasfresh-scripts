@@ -10,6 +10,9 @@ import groovy.json.JsonSlurper;
 
 properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false], parameters([string(defaultValue: 'metasfresh', description: '', name: 'MF_ISSUE_REPOSITORY'), string(defaultValue: '', description: '', name: 'MF_ISSUE_NUMBER'), string(defaultValue: 'stable', description: '', name: 'MF_TARGET_BRANCH')]), pipelineTriggers([])])
 
+/**
+  * Returns a map of <repo-name, map of <sha1: commitUrl>>. Note that we rely on this map being a LinkedHashMap
+  */
 Map retrieveCommits(final String eventsURLString)
 {
   echo "eventsURLString=${eventsURLString}";
@@ -22,6 +25,7 @@ Map retrieveCommits(final String eventsURLString)
 
   // echo "Number of events: ${eventsJson.size()}"
 
+  // a map with <repo-name> => <list of [sha1: commitUrl]>
   final commits = [:];
 
   for (event in eventsJson)
@@ -30,8 +34,7 @@ Map retrieveCommits(final String eventsURLString)
     {
       continue;
     }
-    // echo "event.commit_url=${event.commit_url}";
-
+    echo "event.commit_url=${event.commit_url}";
     final commitUrl = new URL(event.commit_url)
     final HttpURLConnection commitConnection = commitUrl.openConnection();
     final Map commitJson = new JsonSlurper().parse(new InputStreamReader(commitConnection.getInputStream(), "UTF-8"));
@@ -42,7 +45,17 @@ Map retrieveCommits(final String eventsURLString)
 
     if(commitJson.files.size() == 1 && 'ReleaseNotes.md'.equalsIgnoreCase(commitJson.files[0].filename) )
     {
-      echo "Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file";
+      echo "Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file.";
+      echo """Note: the message of that commit starts with (first 50 chars):
+${commitJson.commit.message.take(50)}...""";
+      continue;
+    }
+
+    if(commitJson.parents.size() > 1)
+    {
+      echo "Skipping commit ${event.commit_url} because it has two parents (i.e. looks like a merge).";
+      echo """Note: the message of that commit starts with (first 50 chars):
+${commitJson.commit.message.take(50)}...""";
       continue;
     }
 
@@ -53,115 +66,127 @@ Map retrieveCommits(final String eventsURLString)
     // echo "size=${matchGroup.size()}";
 
     // echo "matchGroup[0][0]=${matchGroup[0][0]}";
-    //echo "repo name (matchGroup[0][1]): ${matchGroup[0][1]}";
-    //echo "commit sha1 (matchGroup[0][2]): ${matchGroup[0][2]}";
+    // echo "repo name (matchGroup[0][1]): ${matchGroup[0][1]}";
+    // echo "commit sha1 (matchGroup[0][2]): ${matchGroup[0][2]}";
 
-    final String repoName=matchGroup[0][1];
-    final String sha1=matchGroup[0][2];
+    final String repoName = matchGroup[0][1];
+    final String sha1 = matchGroup[0][2];
 
     if(commits[repoName])
     {
       //echo "Adding sha1=${sha1} to repoName=${repoName}";
-      commits[repoName].add(sha1);
+      commits[repoName].put(sha1, commitJson.html_url);
     }
     else
     {
       //echo "Creating new list with sha1=${sha1} for repoName=${repoName}";
-      commits[repoName] = [sha1];
+      commits[repoName] = [ (sha1): commitJson.html_url ];
     }
   }
-  // echo "commits=${commits}";
+  //echo "commits=${commits}";
   return commits;
 }
 
 timestamps
 {
-echo "getting a node to write a file"
-node('linux')
-{
-
-  final eventsURLString = "https://api.github.com/repos/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}/events";
-  final Map commits = retrieveCommits(eventsURLString);
-
-final List shellCommands = [];
-
-// IMPORTANT: commits.each { commit -> ... } does not work within the pipeline.
-// See http://stackoverflow.com/questions/40159258/impossibility-to-iterate-over-a-map-using-groovy-within-jenkins-pipeline
-for (commit in commits)
-{
-  final repoName = commit.key;
-  echo "Making commands for repoName=${repoName}";
-
-  shellCommands.add('echo \'REPOS_DIR=${REPOS_DIR}\'');
-
-  shellCommands.add('');
-  shellCommands.add('echo \'#########################\'');
-  shellCommands.add("echo '# Repository ${repoName}'");
-  shellCommands.add('echo \'#########################\'');
-
-  shellCommands.add('cd ${REPOS_DIR}'+"/${repoName}");
-
-  shellCommands.add('');
-  shellCommands.add("# get the target branch's latest version")
-  shellCommands.add("git checkout ${MF_TARGET_BRANCH} && git pull");
-
-  final cherryPickingBranch = "cp-gh${MF_ISSUE_NUMBER}-${MF_ISSUE_REPOSITORY}-to-${MF_TARGET_BRANCH}";
-  shellCommands.add('');
-  shellCommands.add("# create (or reset) a cherry-picking branch to make it easier to discard a failed cp");
-  shellCommands.add("git checkout -B ${cherryPickingBranch}");
-
-  shellCommands.add('');
-  shellCommands.add('# perform the actual cherry-picking');
-  final sha1s = commit.value;
-  for(sha1 in sha1s)
+  node('linux')
   {
-    final cherryPickCmd = "git cherry-pick -x ${sha1}";
-    shellCommands.add(cherryPickCmd);
-  }
+    final eventsURLString = "https://api.github.com/repos/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}/events";
+    final Map commits = retrieveCommits(eventsURLString);
 
-  shellCommands.add('');
-  shellCommands.add('# merge the result into the target branch');
-  shellCommands.add("git checkout ${MF_TARGET_BRANCH}");
-  shellCommands.add("git merge ${cherryPickingBranch}");
-}
-//echo "shellCommands=${shellCommands}";
-//final cherryPickShellCmd = "cd \$\{REPOS_DIR\}/${repoName} && git cherry-pick -x ${changeSet}"
+    final List shellCommands = [];
 
-//final Map repoName2sha1s = commits.groupBy(commit -> commit.repoName);
-//echo "repoName2sha1s=$repoName2sha1s";
+    // IMPORTANT: commits.each { commit -> ... } does not work within the pipeline.
+    // See http://stackoverflow.com/questions/40159258/impossibility-to-iterate-over-a-map-using-groovy-within-jenkins-pipeline
+    for (commit in commits)
+    {
+      final repoName = commit.key;
+      echo "Making commands for repoName=${repoName}";
 
-def shellCommandsFullstring = "";
-for (shellCommand in shellCommands)
-{
-  shellCommandsFullstring = shellCommandsFullstring + """
-${shellCommand}""";
-}
+      shellCommands.add('echo \'REPOS_DIR=${REPOS_DIR}\'');
 
-echo "Setting current build's description";
-currentBuild.description="""To perform the cherry-picking of issue <a href='https://github.com/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}'>metasfresh/${MF_ISSUE_REPOSITORY}#${MF_ISSUE_NUMBER}</a> into target branch <code>${MF_TARGET_BRANCH}</code>,
-the shellcreated by this jobs can be run.
-""";
+      shellCommands.add('');
+      shellCommands.add('echo \'#########################\'');
+      shellCommands.add("echo '# Repository ${repoName}'");
+      shellCommands.add('echo \'#########################\'');
 
-echo "Preparing script file string";
-def scriptFileFullString = """
-#!/bin/bash
-set -o errexit # stop on error
-set -o nounset # don't allow unset variables
+      shellCommands.add('cd ${REPOS_DIR}'+"/${repoName}");
 
-${shellCommandsFullstring}
-""";
+      shellCommands.add('');
+      shellCommands.add("# get the target branch's latest version")
+      shellCommands.add("git checkout ${MF_TARGET_BRANCH} && git pull");
 
+      final cherryPickingBranch = "cp-gh${MF_ISSUE_NUMBER}-${MF_ISSUE_REPOSITORY}-to-${MF_TARGET_BRANCH}";
+      shellCommands.add('');
+      shellCommands.add("# create (or reset) a cherry-picking branch to make it easier to discard a failed cp");
+      shellCommands.add("git checkout -B ${cherryPickingBranch}");
 
+      shellCommands.add('');
+      shellCommands.add('# perform the actual cherry-picking');
+      final sha1AndCommitURLs = commit.value;
+      for(sha1AndCommitURL in sha1AndCommitURLs)
+      {
+        final cherryPickCmd = "git cherry-pick -x ${sha1AndCommitURL.key} # ${sha1AndCommitURL.value}";
+        //final cherryPickCmd = "git cherry-pick -x ${sha1AndCommitURL.key}";
+        shellCommands.add(cherryPickCmd);
+      }
 
-// also create and archive a shell script file that we can use
-  echo "Setting script file name";
-  final scriptFileName="cherrypick_issue_${MF_ISSUE_REPOSITORY}_${MF_ISSUE_NUMBER}_to_${MF_TARGET_BRANCH}.sh";
+      shellCommands.add('');
+      shellCommands.add('# merge the result into the target branch');
+      shellCommands.add("git checkout ${MF_TARGET_BRANCH}");
+      shellCommands.add("git merge ${cherryPickingBranch}");
+    }
+    //echo "shellCommands=${shellCommands}";
 
-  echo "Writing shell script to file ${scriptFileName}"
-  writeFile file: scriptFileName, text: scriptFileFullString;
+    def shellCommandsFullstring = '';
+    for (shellCommand in shellCommands)
+    {
+      shellCommandsFullstring = shellCommandsFullstring + """
+      ${shellCommand}""";
+    }
 
-  echo "Archiving script file ${scriptFileName}"
-  archiveArtifacts artifacts: scriptFileName;
-} // node
-echo "done";
+    echo "Preparing script file string";
+    def scriptFileFullString = """
+    #!/bin/bash
+    set -o errexit # stop on error
+    set -o nounset # don't allow unset variables
+
+    ${shellCommandsFullstring}
+    """;
+
+    echo "Setting script file name";
+    final scriptFileName="cherrypick_issue_${MF_ISSUE_REPOSITORY}_${MF_ISSUE_NUMBER}_to_${MF_TARGET_BRANCH}.sh";
+
+    echo "Writing shell script to file ${scriptFileName}"
+    writeFile file: scriptFileName, text: scriptFileFullString;
+
+    echo "Archiving script file ${scriptFileName}"
+    archiveArtifacts artifacts: scriptFileName;
+
+    echo "Setting current build's description";
+    def descriptionURLsFullString = ''
+    for (commit in commits)
+    {
+      final repoName = commit.key;
+      descriptionURLsFullString = descriptionURLsFullString + """
+      <b>${repoName}</b>
+      <ul>
+      """;
+      final sha1AndCommitURLs = commit.value;
+      for(sha1AndCommitURL in sha1AndCommitURLs)
+      {
+        descriptionURLsFullString = descriptionURLsFullString + """
+        <li><a href='${sha1AndCommitURL.value}'>${sha1AndCommitURL.key}</a></li>""";
+      }
+      descriptionURLsFullString = descriptionURLsFullString + "</ul>";
+    }
+
+    currentBuild.description="""To perform the cherry-picking of issue <a href='https://github.com/metasfresh/${MF_ISSUE_REPOSITORY}/issues/${MF_ISSUE_NUMBER}'>metasfresh/${MF_ISSUE_REPOSITORY}#${MF_ISSUE_NUMBER}</a> into target branch <code>${MF_TARGET_BRANCH}</code>,
+    the shell script created by this jobs can be run.
+    It would cherry-pick the following commits:
+    <p/>
+    ${descriptionURLsFullString}
+    """;
+  } // node
+  echo "done";
 } // timestamps
