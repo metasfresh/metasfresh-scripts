@@ -161,8 +161,11 @@ cherrypick_if_not_yet_applied()
   local sha1=$1
 
   set +e # temporarily allow not 0 exit codes
-  git cherry ''' + MF_TARGET_BRANCH + ''' $sha1 | grep $sha1#
+
+  # i don't really understand git cherry, but *if* it returns the given sha1 (i.e. if grep exists with 0), then the respective change was not yet made
+  git cherry ''' + MF_TARGET_BRANCH + ''' $sha1 | grep $sha1
   local grep_exit_code=$?
+
   set -e
 
   # thx to http://bencane.com/2014/09/02/understanding-exit-codes-and-how-to-use-them-in-bash-scripts/
