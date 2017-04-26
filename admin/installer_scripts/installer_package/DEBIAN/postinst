@@ -2,8 +2,8 @@
 
 # Metasfresh Automated Installation 
 
-define_mem_stats()
-{
+define_mem_stats(){
+
  MEM_TOTAL_KB=$(cat /proc/meminfo | grep MemTotal | cut -d ":" -f2 | tr -d [:space:] | cut -d "k" -f1)
  MEM_TOTAL_MB=$(( $MEM_TOTAL_KB / 1024 ))
  
@@ -40,8 +40,8 @@ define_mem_stats()
 
 
 
-package_install_metasfresh()
-{
+package_install_metasfresh(){
+
   local interface=$(route | grep default | awk '{print $8}')
   local address=$(ip addr | awk '/inet/ && /'$interface'/{sub(/\/.*$/,"",$2); print $2}')
   local SYS_VER=$(cat /proc/1/comm)
@@ -87,8 +87,8 @@ package_install_metasfresh()
  sed -i '/127.0.1.1/d' /etc/hosts
 }
 
-package_install_database()
-{
+package_install_database(){
+
  SYS_VER=$(cat /proc/1/comm)
  PG_HBA_FILE=$(su postgres -c 'psql -A -t -c "SHOW hba_file;"')
  PG_CONF_FILE=$(su postgres -c 'psql -A -t -c "SHOW config_file;"')
@@ -114,7 +114,31 @@ package_install_database()
  chown metasfresh:metasfresh -R /home/metasfresh
  mv /opt/metasfresh_install/database/metasfresh.pgdump /opt/metasfresh/data/
  echo "[INFO] Finished creating database."
+ 
 }
+
+package_install_webui(){
+ 
+ local interface=$(route | grep default | awk '{print $8}')
+ local address=$(ip addr | awk '/inet/ && /'$interface'/{sub(/\/.*$/,"",$2); print $2}')
+ local SYS_VER=$(cat /proc/1/comm)
+  
+ mkdir /opt/metasfresh-webui-api && mkdir metasfresh-webui-frontend
+ mkdir /opt/metasfresh-webui-api/metasfresh-webui-api && mkdir /opt/metasfresh-webui-api/log
+ 
+ echo "[INFO] Generating initial configs (webui)"
+ sed -i "s/FOO_APP/$(hostname)/g" /opt/metasfresh_install/etc/metasfresh_webui_api.properties
+ sed -i "s/FOO_IP/${address}/g" /opt/metasfresh_install/etc/webui_config.js
+ 
+ cp /opt/metasfresh_install/etc/metasfresh-webui-api.conf /opt/metasfresh-webui-api/
+ cp /opt/metasfresh_install/etc/metasfresh_webui_api.properties /opt/metasfresh-webui-api/metasfresh.properties
+ cp /opt/metasfresh_install/etc/webui_logback.xml /opt/metasfresh-webui-api/logback.xml
+ cp /opt/metasfresh_install/etc/webui_application.properties /opt/metasfresh-webui-api/application.properties
+
+#TODO: copy webui-conf, copy executables, enable a2mods, copy a2 confs, enable/disable a2 confs
+ 
+ 
+} 
 
 SYS_VER=$(cat /proc/1/comm)
 define_mem_stats

@@ -1,7 +1,7 @@
 Package: metasfresh
 Architecture: all
 Maintainer: jb
-Depends: bash, postgresql-common, postgresql-contrib, openjdk-8-jdk-headless 
+Depends: bash, postgresql-common, postgresql-contrib, openjdk-8-jdk-headless, apache2, elasticsearch
 Priority: optional
 Version: 5.6
 Description: Metasfresh
