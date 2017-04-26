@@ -129,14 +129,33 @@ package_install_webui(){
  echo "[INFO] Generating initial configs (webui)"
  sed -i "s/FOO_APP/$(hostname)/g" /opt/metasfresh_install/etc/metasfresh_webui_api.properties
  sed -i "s/FOO_IP/${address}/g" /opt/metasfresh_install/etc/webui_config.js
+ sed -i "s/\#START_DAEMON=true/START_DAEMON=true/g" /etc/default/elasticsearch
+ sed -i "s/\#cluster\.name\:\ elasticsearch/cluster\.name\:\ metasfresh/g" /etc/elasticsearch/elasticsearch.yml
+ sed -i "s/\#network\.host\:.*/network\.host\:\ 0\.0\.0\.0/g" /etc/elasticsearch/elasticsearch.yml
  
  cp /opt/metasfresh_install/etc/metasfresh-webui-api.conf /opt/metasfresh-webui-api/
  cp /opt/metasfresh_install/etc/metasfresh_webui_api.properties /opt/metasfresh-webui-api/metasfresh.properties
  cp /opt/metasfresh_install/etc/webui_logback.xml /opt/metasfresh-webui-api/logback.xml
  cp /opt/metasfresh_install/etc/webui_application.properties /opt/metasfresh-webui-api/application.properties
-
-#TODO: copy webui-conf, copy executables, enable a2mods, copy a2 confs, enable/disable a2 confs
+ cp /opt/metasfresh/download/metasfresh-webui-api.jar /opt/metasfresh-webui-api/
+ cp /opt/metasfresh/download/metasfresh-webui-frontend.tar.gz /opt/metasfresh-webui-frontend/
  
+ chmod 755 /opt/metasfresh-webui-api/metasfresh-webui-api.jar
+ ln -s /opt/metasfresh-webui-api/metasfresh-webui-api.jar /etc/init.d/metasfresh-webui-api
+ update-rc.d metasfresh-webui-api defaults
+ cd /opt/metasfresh-webui-frontend && tar xvzf ./metasfresh-webui-frontend.tar.gz && rm ./metasfresh-webui-frontend.tar.gz
+ cp /opt/metasfresh_install/etc/webui_config.js /opt/metasfresh-webui-frontend/dist/config.js
+ chown -R metasfresh:metasfresh /opt/metasfresh-webui-api && chown -R /opt/metasfresh-webui-frontend
+ 
+ a2enmod proxy proxy_http proxy_html proxy_wstunnel rewrite
+ cp -a /etc/metasfresh_install/etc/metasfresh-webui.conf /etc/apache2/sites-available/
+ cp -a /etc/metasfresh_install/etc/metasfresh-webui_ssl.conf /etc/apache2/sites-available/
+ a2dissite 000-default.conf
+ a2ensite metasfresh-webui.conf
+ systemctl restart apache2.service
+  
+ systemctl restart elasticsearch.service
+ /etc/init.d/metasfresh-webui-api start
  
 } 
 
@@ -149,7 +168,7 @@ package_install_database
  elif [[ "$SYS_VER" == "systemd" ]]; then
    systemctl start metasfresh_server.service 
  fi
-
+package_install_webui
 
  if [[ -d /opt/metasfresh_install ]]; then
    rm -r /opt/metasfresh_install
