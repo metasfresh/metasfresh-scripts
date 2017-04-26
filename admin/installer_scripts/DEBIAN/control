@@ -1,0 +1,8 @@
+Package: metasfresh
+Architecture: all
+Maintainer: jb
+Depends: bash, postgresql-common, postgresql-contrib, openjdk-8-jdk-headless 
+Priority: optional
+Version: 5.6
+Description: Metasfresh
+ A free opensource ERP Software
