@@ -14,8 +14,15 @@ if [[ ! -f "/usr/bin/java" ]] || [[ ! $J_VERSION == "8" ]]; then
      apt-get -y install python-software-properties software-properties-common
      add-apt-repository -y ppa:openjdk-r/ppa
   fi
-  apt-get update
+  apt-get -qqq update
   apt-get -y install openjdk-8-jdk-headless
+fi
+
+if [[ ! -d /etc/elasticsearch ]]; then
+  wget -qO - https://packages.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+  echo "deb https://packages.elastic.co/elasticsearch/2.x/debian stable main" > /etc/apt/sources.list.d/elasticsearch-2.x.list
+  apt-get -qqq update
+  apt-get -y install elasticsearch
 fi
 
 dpkg -i $INSTALLER_SCRIPT_DIR/metasfresh*.deb
