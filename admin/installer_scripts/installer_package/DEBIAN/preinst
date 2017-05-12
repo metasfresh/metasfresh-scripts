@@ -1,0 +1,13 @@
+#!/bin/bash
+
+
+DIST=$(lsb_release -r | awk '{print $2}')
+if [[ ! "$DIST" == "12.04" ]] && [[ ! "$DIST" == "14.04" ]] && [[ ! "$DIST" == "16.04" ]]; then 
+  echo "
+[ERROR] Only Ubuntu 12.04 LTS, Ubuntu 14.04 LTS and Ubuntu 16.04 LTS currently supported!
+        Please get in contact with the metas-fresh staff if you want to install this package on a different machine."
+  exit 1
+fi
+
+exit 0
+

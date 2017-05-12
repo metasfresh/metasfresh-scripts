@@ -1,0 +1,180 @@
+#!/bin/bash
+
+# Metasfresh Automated Installation 
+
+define_mem_stats(){
+
+ MEM_TOTAL_KB=$(cat /proc/meminfo | grep MemTotal | cut -d ":" -f2 | tr -d [:space:] | cut -d "k" -f1)
+ MEM_TOTAL_MB=$(( $MEM_TOTAL_KB / 1024 ))
+ 
+ if [[ $MEM_TOTAL_MB -lt 4000 ]]; then
+   AD_SET_MINMEM=512
+   AD_SET_MAXMEM=1024
+ else
+   AD_SET_MINMEM=512
+   AD_SET_MAXMEM=2048
+ fi
+
+ PG_FREE_MB=$(( $MEM_TOTAL_MB - $AD_SET_MAXMEM ))
+ PG_FREE_GB=$(( $PG_FREE_MB / 1024 ))
+ 
+ PG_CALC_FACT=$PG_FREE_GB
+
+ PG_MAX_CONN=200
+ PG_SHARED_BUFFERS=$(( $PG_CALC_FACT * 256 ))	#MB
+ PG_EFFECT_CACHE=$(( $PG_CALC_FACT * 768 ))	#MB
+ PG_WORK_MEM=$(( $PG_CALC_FACT * 655 ))		#kB
+ PG_MAINT_WORK_MEM=$(( $PG_CALC_FACT * 64 ))	#MB
+ PG_CHECK_SEG=32
+ PG_CHECK_COMPL_TARGET=0.9
+ if [[ $PG_FREE_GB -eq "1" ]]; then
+    PG_WAL_BUFFERS=7864kB
+ else
+    PG_WAL_BUFFERS=16MB
+ fi
+ PG_DEF_STAT_TARGET=100
+ 
+ KRNL_SHMMAX=$(( $PG_CALC_FACT * 536870912 ))	
+ KRNL_SHMALL=$(( $PG_CALC_FACT * 131072 ))	
+}
+
+
+
+package_install_metasfresh(){
+
+  local interface=$(route | grep default | awk '{print $8}')
+  local address=$(ip addr | awk '/inet/ && /'$interface'/{sub(/\/.*$/,"",$2); print $2}')
+  local SYS_VER=$(cat /proc/1/comm)
+
+  echo "[INFO] Adding User metasfresh"
+  adduser metasfresh --quiet --gecos "" --home /home/metasfresh --shell /bin/bash --disabled-password
+  chown metasfresh:metasfresh -R /opt/metasfresh_install
+ echo "[INFO] Generating initial configs"
+ #Modifying configs
+  mkdir /opt/metasfresh_install/apps/metasfresh/metasfresh_server
+  cp /opt/metasfresh_install/etc/local_settings.properties /home/metasfresh/
+  chown metasfresh:metasfresh /home/metasfresh/local_settings.properties
+  sed -ie "s/^METASFRESH_APPS_SERVER=.*/METASFRESH_APPS_SERVER=$(hostname)/" /home/metasfresh/local_settings.properties
+  sed -ie "s/^METASFRESH_DB_SERVER=.*/METASFRESH_DB_SERVER=$(hostname)/" /home/metasfresh/local_settings.properties
+  sed -i "s/FOO_APP/$(hostname)/g" /opt/metasfresh_install/etc/metasfresh.properties 
+  sed -i "s/FOO_DBMS/$(hostname)/g" /opt/metasfresh_install/etc/metasfresh.properties 
+  sed -i "s/MF_MAX_MEM/$AD_SET_MAXMEM/g" /opt/metasfresh_install/etc/metasfresh_server.conf
+ echo "[INFO] Integrating configs"
+ #Integrating configs
+  cp -a /opt/metasfresh_install/etc/metasfresh.properties /opt/metasfresh_install/apps/metasfresh/ 
+  cp -a /opt/metasfresh_install/etc/metasfresh_server.conf /opt/metasfresh_install/apps/metasfresh/
+ echo "[INFO] Putting application in place"
+ #Moving apps
+  mv /opt/metasfresh_install/apps/metasfresh* /opt/
+  chmod 400 /opt/metasfresh/metasfresh_server.conf
+  chown metasfresh:metasfresh -R /opt/metasfresh
+  echo "METASFRESH_HOME=\"/opt/metasfresh\"" > /etc/environment
+  if [[ "$SYS_VER" == "init" ]]; then
+    ln -s /opt/metasfresh/metasfresh_server.jar /etc/init.d/metasfresh_server
+    update-rc.d metasfresh_server defaults
+    /opt/metasfresh_install/scripts/mf_visudo.sh > /dev/null 2>&1
+  elif [[ "$SYS_VER" == "systemd" ]]; then
+   cp -a /opt/metasfresh_install/scripts/metasfresh_server.service /etc/systemd/system/
+   systemctl enable metasfresh_server.service
+   mv /opt/metasfresh_install/scripts/metasfresh /etc/sudoers.d/
+   chown root:root /etc/sudoers.d/metasfresh
+   chmod 0440 /etc/sudoers.d/metasfresh
+  fi
+ if [[ -z $(grep $address /etc/hosts) ]]; then
+    echo "$address  $(hostname)" >> /etc/hosts
+ fi
+ 
+ sed -i '/127.0.1.1/d' /etc/hosts
+}
+
+package_install_database(){
+
+ SYS_VER=$(cat /proc/1/comm)
+ PG_HBA_FILE=$(su postgres -c 'psql -A -t -c "SHOW hba_file;"')
+ PG_CONF_FILE=$(su postgres -c 'psql -A -t -c "SHOW config_file;"')
+  echo "[INFO] Installing database"
+ su postgres -c 'psql -f /opt/metasfresh_install/database/install.sql' > /dev/null 2>&1
+ echo "$(hostname):5432:*:metasfresh:metasfresh" >> /home/metasfresh/.pgpass
+ echo "localhost:5432:*:metasfresh:metasfresh" >> /home/metasfresh/.pgpass
+ sed -i "s/.*listen_addresses.*/listen_addresses = \'*\'/g" ${PG_CONF_FILE}
+ echo "host   metasfresh    metasfresh     0.0.0.0/0         md5" >> ${PG_HBA_FILE}
+ if [[ "$SYS_VER" == "init" ]]; then
+    service postgresql restart > /dev/null 2>&1
+ elif [[ "$SYS_VER" == "systemd" ]]; then
+    systemctl restart postgresql.service > /dev/null 2>&1
+ fi
+ chown metasfresh:metasfresh /home/metasfresh/.pgpass
+ chmod 600 /home/metasfresh/.pgpass
+ echo "[INFO] Creating initial database (this may take a while) ..."
+ su metasfresh -c 'pg_restore -Fc -j 2 -O -d metasfresh /opt/metasfresh_install/database/metasfresh.pgdump  > /dev/null 2>&1'
+ sed -i "s/FOOBAR/$(hostname)/g" /opt/metasfresh_install/database/postcopy.sql
+ su metasfresh -c 'psql -d metasfresh -f /opt/metasfresh_install/database/postcopy.sql  > /dev/null 2>&1'
+ mkdir -p /opt/metasfresh/data/
+ chown metasfresh:metasfresh /opt/metasfresh/data
+ chown metasfresh:metasfresh -R /home/metasfresh
+ mv /opt/metasfresh_install/database/metasfresh.pgdump /opt/metasfresh/data/
+ echo "[INFO] Finished creating database."
+ 
+}
+
+package_install_webui(){
+ 
+ local interface=$(route | grep default | awk '{print $8}')
+ local address=$(ip addr | awk '/inet/ && /'$interface'/{sub(/\/.*$/,"",$2); print $2}')
+ local SYS_VER=$(cat /proc/1/comm)
+ 
+ mkdir /opt/metasfresh-webui-api && mkdir /opt/metasfresh-webui-frontend
+ mkdir /opt/metasfresh-webui-api/metasfresh-webui-api && mkdir /opt/metasfresh-webui-api/log
+ 
+ echo "[INFO] Generating initial configs (webui)"
+ sed -i "s/FOO_APP/$(hostname)/g" /opt/metasfresh_install/etc/metasfresh_webui_api.properties
+ sed -i "s/FOO_IP/${address}/g" /opt/metasfresh_install/etc/webui_config.js
+ sed -i "s/\#START_DAEMON=true/START_DAEMON=true/g" /etc/default/elasticsearch
+ sed -i "s/\#\ cluster\.name\:.*/cluster\.name\:\ metasfresh/g" /etc/elasticsearch/elasticsearch.yml
+ sed -i "s/\#\ network\.host\:.*/network\.host\:\ localhost/g" /etc/elasticsearch/elasticsearch.yml
+ echo "[INFO] Installing metasfresh (webui)"
+ cp /opt/metasfresh_install/etc/metasfresh-webui-api.conf /opt/metasfresh-webui-api/
+ cp /opt/metasfresh_install/etc/metasfresh_webui_api.properties /opt/metasfresh-webui-api/metasfresh.properties
+ cp /opt/metasfresh_install/etc/webui_logback.xml /opt/metasfresh-webui-api/logback.xml
+ cp /opt/metasfresh_install/etc/webui_application.properties /opt/metasfresh-webui-api/application.properties
+ cp /opt/metasfresh/download/metasfresh-webui-api.jar /opt/metasfresh-webui-api/
+ cp /opt/metasfresh/download/metasfresh-webui-frontend.tar.gz /opt/metasfresh-webui-frontend/
+ 
+ chmod 755 /opt/metasfresh-webui-api/metasfresh-webui-api.jar
+ ln -s /opt/metasfresh-webui-api/metasfresh-webui-api.jar /etc/init.d/metasfresh-webui-api
+ update-rc.d metasfresh-webui-api defaults
+ cd /opt/metasfresh-webui-frontend && tar xvzf ./metasfresh-webui-frontend.tar.gz && rm ./metasfresh-webui-frontend.tar.gz
+ cp /opt/metasfresh_install/etc/webui_config.js /opt/metasfresh-webui-frontend/dist/config.js
+ chown -R metasfresh:metasfresh /opt/metasfresh-webui-api && chown -R metasfresh:metasfresh /opt/metasfresh-webui-frontend
+ 
+ echo "[INFO] Applying Apache2 mods and configs"
+ a2enmod proxy proxy_http proxy_html proxy_wstunnel rewrite
+ cp -a /opt/metasfresh_install/etc/metasfresh-webui.conf /etc/apache2/sites-available/
+ cp -a /opt/metasfresh_install/etc/metasfresh-webui_ssl.conf /etc/apache2/sites-available/
+ a2dissite 000-default.conf
+ a2ensite metasfresh-webui.conf
+ 
+ systemctl restart apache2.service
+ systemctl restart elasticsearch.service
+ /etc/init.d/metasfresh-webui-api start
+ 
+ systemctl enable elasticsearch.service
+} 
+
+SYS_VER=$(cat /proc/1/comm)
+define_mem_stats
+package_install_metasfresh
+package_install_database
+ if [[ "$SYS_VER" == "init" ]]; then
+   service metasfresh_server start
+ elif [[ "$SYS_VER" == "systemd" ]]; then
+   systemctl start metasfresh_server.service 
+ fi
+package_install_webui
+
+ if [[ -d /opt/metasfresh_install ]]; then
+   rm -r /opt/metasfresh_install
+ fi
+
+echo "[SUCCESS] Done installing metasfresh!"
+ 

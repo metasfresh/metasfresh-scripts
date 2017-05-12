@@ -1,0 +1,12 @@
+[Unit]
+Description=metasfresh_server
+After=syslog.target
+
+[Service]
+User=metasfresh
+ExecStart=/opt/metasfresh/metasfresh_server.jar
+SuccessExitStatus=143
+PIDFile=/opt/metasfresh/metasfresh_server/metasfresh_server.service.pid
+
+[Install]
+WantedBy=multi-user.target
