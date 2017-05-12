@@ -60,7 +60,7 @@ def updateReleaseBranch(final String repoURL)
 
 				sh "git config credential.username ${GIT_USERNAME}";
 				sh 'git config credential.helper \'!echo password=\$GIT_PASSWORD; echo\'';
-			
+
 				// we only need this tag for a limited time, so create a "lightweight" tag, see https://git-scm.com/docs/git-tag for details
 				final String tagName="${env.BUILD_TAG}"
 				sh "git tag ${tagName}";
@@ -105,6 +105,10 @@ stage("Checkout repos")
 		dir('metasfresh-parent')
 		{
 			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-parent.git';
+		}
+		dir('metasfresh-admin')
+		{
+			updateReleaseBranch 'https://github.com/metasfresh/metasfresh-admin.git';
 		}
 		dir('metasfresh')
 		{
