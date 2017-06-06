@@ -54,6 +54,7 @@ stage("Checkout repos")
 		sshagent(['metas-dev-ssh-key'])
 		{
 				updateReleaseBranch 'metasfresh-parent';
+				updateReleaseBranch 'metasfresh-admin';
 				updateReleaseBranch 'metasfresh';
 				updateReleaseBranch 'metasfresh-webui-api';
 				updateReleaseBranch 'metasfresh-webui-frontend';
