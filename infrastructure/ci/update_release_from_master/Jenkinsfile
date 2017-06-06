@@ -6,11 +6,9 @@ def updateReleaseBranch(final String repoName)
 {
 		echo "BEGIN updateReleaseBranch with repoName=${repoName}";
 
-		//final repoURL = "https://github.com/metasfresh/${repoName}.git";
 		final repoURL = "git@github.com:metasfresh/${repoName}.git";
 		echo "repoURL=${repoURL}";
 
-		// use the git pipeline step because it can take advantage of the jenkins infrastructure and might be more efficient than just cloning each time
 		sh "git clone ${repoURL}";
 
 		dir(repoName)
