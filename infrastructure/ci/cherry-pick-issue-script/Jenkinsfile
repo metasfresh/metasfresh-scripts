@@ -103,7 +103,7 @@ timestamps
       final repoName = commit.key;
       echo "Making commands for repoName=${repoName}";
 
-      shellCommands.add('echo \'REPOS_DIR=${REPOS_DIR}\'');
+      shellCommands.add('echo \"REPOS_DIR=${REPOS_DIR}\"');
 
       shellCommands.add('');
       shellCommands.add('echo \'#########################\'');
