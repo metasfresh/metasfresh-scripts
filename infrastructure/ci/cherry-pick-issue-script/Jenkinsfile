@@ -11,76 +11,112 @@ import groovy.json.JsonSlurper;
 properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false], parameters([string(defaultValue: 'metasfresh', description: '', name: 'MF_ISSUE_REPOSITORY'), string(defaultValue: '', description: '', name: 'MF_ISSUE_NUMBER'), string(defaultValue: 'stable', description: '', name: 'MF_TARGET_BRANCH')]), pipelineTriggers([])])
 
 /**
+ * Retrieves githup events for the given URL and page number..
+ * Fails if a http response code != 200 is returned.
+ *
+ * See issue implement crude pagination for cherry-pick-issue-script https://github.com/metasfresh/metasfresh-scripts/issues/8.
+ */
+List retrieveEvents(final String eventsURLString, final int pageNo)
+{
+  final eventsURLStringWithPageNo="${eventsURLString}?page=${pageNo}";
+  echo "eventsURLStringWithPageNo=${eventsURLStringWithPageNo}";
+
+  // get a JSON containing all events about this issue from github
+  // see https://developer.github.com/v3/issues/events/
+  final apiUrl = new URL(eventsURLStringWithPageNo)
+  final HttpURLConnection connection = apiUrl.openConnection();
+  final responseCode = connection.getResponseCode();
+  if(responseCode != 200)
+  {
+    String msg = """Http connection received responseCode=${responseCode};
+responseMessage=${connection.getResponseMessage()}"""
+    error msg;
+  }
+  final List eventsJson = new JsonSlurper().parse(new InputStreamReader(connection.getInputStream(), "UTF-8"));
+
+  echo "Number of events for page=${pageNo}: ${eventsJson.size()}";
+  return eventsJson;
+}
+
+/**
   * Returns a map of <repo-name, map of <sha1: commitUrl>>. Note that we rely on this map being a LinkedHashMap
   */
 Map retrieveCommits(final String eventsURLString)
 {
-  echo "eventsURLString=${eventsURLString}";
-
-  // get a JSON containing all events about this issue from github
-  // see https://developer.github.com/v3/issues/events/
-  final apiUrl = new URL(eventsURLString)
-  final HttpURLConnection connection = apiUrl.openConnection();
-  final List eventsJson = new JsonSlurper().parse(new InputStreamReader(connection.getInputStream(), "UTF-8"));
-
-  // echo "Number of events: ${eventsJson.size()}"
+  echo "eventsURLString=${eventsURLString} (will prepend page number!)";
 
   // a map with <repo-name> => <list of [sha1: commitUrl]>
   final commits = [:];
 
-  for (event in eventsJson)
+  // issue https://github.com/metasfresh/metasfresh-scripts/issues/8 :
+  // iterate with ascending page numbers as long as a non-empty list is returned
+  int pageNo = 1;
+  while(true)
   {
-    if(!event.commit_url)
+    List eventsJson = retrieveEvents(eventsURLString, pageNo);
+    if(eventsJson.isEmpty())
     {
-      continue;
-    }
-    echo "event.commit_url=${event.commit_url}";
-    final commitUrl = new URL(event.commit_url)
-    final HttpURLConnection commitConnection = commitUrl.openConnection();
-    final Map commitJson = new JsonSlurper().parse(new InputStreamReader(commitConnection.getInputStream(), "UTF-8"));
-
-    // echo "commitJson.files.size()=${commitJson.files.size()}";
-    // echo "commitJson.files[0].filename=${commitJson.files[0].filename}";
-    // echo "commitJson.files=${commitJson.files}";
-
-    if(commitJson.files.size() == 1 && 'ReleaseNotes.md'.equalsIgnoreCase(commitJson.files[0].filename) )
-    {
-      echo """Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file.
-Note: the message of that commit starts with (first 50 chars):
-${commitJson.commit.message.take(50)}...""";
-      continue;
+      return commits;
     }
 
-    if(commitJson.parents.size() > 1)
+    // increase the page number for the next iteration
+    pageNo = pageNo + 1;
+
+    // evaluate the events from retrieved in this iteration
+    for (event in eventsJson)
     {
-      echo """Skipping commit ${event.commit_url} because it has two parents (i.e. looks like a merge).
-Note: the message of that commit starts with (first 50 chars):
-${commitJson.commit.message.take(50)}...""";
-      continue;
-    }
+      if(!event.commit_url)
+      {
+        continue;
+      }
+      echo "event.commit_url=${event.commit_url}";
+      final commitUrl = new URL(event.commit_url)
+      final HttpURLConnection commitConnection = commitUrl.openConnection();
+      final Map commitJson = new JsonSlurper().parse(new InputStreamReader(commitConnection.getInputStream(), "UTF-8"));
 
-    // example:
-    // "commit_url": "https://api.github.com/repos/metasfresh/metasfresh/commits/bc63a377a74ad44ed1d9e87cb1da75158f18a5d0",
-    final matchGroup = (event.commit_url =~ /https:\/\/api.github.com\/repos\/metasfresh\/([^ ]+)\/commits\/([a-z0-9]+)/);
-    // echo "hasGroup=${matchGroup.hasGroup()}";
-    // echo "size=${matchGroup.size()}";
+      // echo "commitJson.files.size()=${commitJson.files.size()}";
+      // echo "commitJson.files[0].filename=${commitJson.files[0].filename}";
+      // echo "commitJson.files=${commitJson.files}";
 
-    // echo "matchGroup[0][0]=${matchGroup[0][0]}";
-    // echo "repo name (matchGroup[0][1]): ${matchGroup[0][1]}";
-    // echo "commit sha1 (matchGroup[0][2]): ${matchGroup[0][2]}";
+      if(commitJson.files.size() == 1 && 'ReleaseNotes.md'.equalsIgnoreCase(commitJson.files[0].filename) )
+      {
+        echo """Skipping commit ${event.commit_url} because is just altered the ReleaseNotes.md file.
+  Note: the message of that commit starts with (first 50 chars):
+  ${commitJson.commit.message.take(50)}...""";
+        continue;
+      }
 
-    final String repoName = matchGroup[0][1];
-    final String sha1 = matchGroup[0][2];
+      if(commitJson.parents.size() > 1)
+      {
+        echo """Skipping commit ${event.commit_url} because it has two parents (i.e. looks like a merge).
+  Note: the message of that commit starts with (first 50 chars):
+  ${commitJson.commit.message.take(50)}...""";
+        continue;
+      }
 
-    if(commits[repoName])
-    {
-      //echo "Adding sha1=${sha1} to repoName=${repoName}";
-      commits[repoName].put(sha1, commitJson.html_url);
-    }
-    else
-    {
-      //echo "Creating new list with sha1=${sha1} for repoName=${repoName}";
-      commits[repoName] = [ (sha1): commitJson.html_url ];
+      // example:
+      // "commit_url": "https://api.github.com/repos/metasfresh/metasfresh/commits/bc63a377a74ad44ed1d9e87cb1da75158f18a5d0",
+      final matchGroup = (event.commit_url =~ /https:\/\/api.github.com\/repos\/metasfresh\/([^ ]+)\/commits\/([a-z0-9]+)/);
+      // echo "hasGroup=${matchGroup.hasGroup()}";
+      // echo "size=${matchGroup.size()}";
+
+      // echo "matchGroup[0][0]=${matchGroup[0][0]}";
+      // echo "repo name (matchGroup[0][1]): ${matchGroup[0][1]}";
+      // echo "commit sha1 (matchGroup[0][2]): ${matchGroup[0][2]}";
+
+      final String repoName = matchGroup[0][1];
+      final String sha1 = matchGroup[0][2];
+
+      if(commits[repoName])
+      {
+        //echo "Adding sha1=${sha1} to repoName=${repoName}";
+        commits[repoName].put(sha1, commitJson.html_url);
+      }
+      else
+      {
+        //echo "Creating new list with sha1=${sha1} for repoName=${repoName}";
+        commits[repoName] = [ (sha1): commitJson.html_url ];
+      }
     }
   }
   //echo "commits=${commits}";
