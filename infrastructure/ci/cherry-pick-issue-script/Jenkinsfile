@@ -8,7 +8,12 @@ import groovy.json.JsonSlurper;
 //final MF_ISSUE_NUMBER='264';
 //final MF_TARGET_BRANCH='test';
 
-properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false], parameters([string(defaultValue: 'metasfresh', description: '', name: 'MF_ISSUE_REPOSITORY'), string(defaultValue: '', description: '', name: 'MF_ISSUE_NUMBER'), string(defaultValue: 'stable', description: '', name: 'MF_TARGET_BRANCH')]), pipelineTriggers([])])
+properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false],
+  parameters([
+    string(defaultValue: 'metasfresh', description: 'github repo of the issue in question. Commits can also be in other repos.', name: 'MF_ISSUE_REPOSITORY'),
+    string(defaultValue: '', description: 'Issue number within MF_ISSUE_REPOSITORY. Just the number, no ''#''.', name: 'MF_ISSUE_NUMBER'),
+    string(defaultValue: 'release', description: '', name: 'MF_TARGET_BRANCH')]),
+  pipelineTriggers([])])
 
 /**
   * Returns a map of <repo-name, map of <sha1: commitUrl>>. Note that we rely on this map being a LinkedHashMap
@@ -103,6 +108,7 @@ timestamps
       final repoName = commit.key;
       echo "Making commands for repoName=${repoName}";
 
+      shellCommands.add('REPOS_DIR=$(pwd)'); // assume that the current folder is the one containing the repositories we are CPing in
       shellCommands.add('echo \"REPOS_DIR=${REPOS_DIR}\"');
 
       shellCommands.add('');
