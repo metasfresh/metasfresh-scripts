@@ -137,15 +137,25 @@ timestamps
 
     final List shellCommands = [];
 
+	shellCommands.add('# assume that the current folder is the one containing the repositories we are CPing in');
+    shellCommands.add('REPOS_DIR=$(pwd)');
+    shellCommands.add('echo \"REPOS_DIR=${REPOS_DIR}\"');
+
+    shellCommands.add('# ask the user to verify that the script operates on the repos it should operate on');
+    shellCommands.add('# thanks to https://stackoverflow.com/a/1885534/1012103');
+    shellCommands.add('read -p \'Does REPOS_DIR contain the the correct directory? [Y/N]: \' -r');
+    shellCommands.add('if [[ ! $REPLY =~ ^[Yy]$ ]]');
+    shellCommands.add('then');
+    shellCommands.add('   echo \'Please cd to the directory that contains the repositories you wish to cherry-pick on and rerun this script\'');
+    shellCommands.add('	  exit 1');
+    shellCommands.add('fi');
+
     // IMPORTANT: commits.each { commit -> ... } does not work within the pipeline.
     // See http://stackoverflow.com/questions/40159258/impossibility-to-iterate-over-a-map-using-groovy-within-jenkins-pipeline
     for (commit in commits)
     {
       final repoName = commit.key;
       echo "Making commands for repoName=${repoName}";
-
-      shellCommands.add('REPOS_DIR=$(pwd)'); // assume that the current folder is the one containing the repositories we are CPing in
-      shellCommands.add('echo \"REPOS_DIR=${REPOS_DIR}\"');
 
       shellCommands.add('');
       shellCommands.add('echo \'#########################\'');
@@ -155,7 +165,7 @@ timestamps
       shellCommands.add('cd ${REPOS_DIR}'+"/${repoName}");
 
       shellCommands.add('');
-      shellCommands.add("# get the target branch's latest version")
+      shellCommands.add("# get the target branch's latest version");
       shellCommands.add("git checkout ${MF_TARGET_BRANCH} && git pull");
 
       final cherryPickingBranch = "cp-gh${MF_ISSUE_NUMBER}-${MF_ISSUE_REPOSITORY}-to-${MF_TARGET_BRANCH}";
