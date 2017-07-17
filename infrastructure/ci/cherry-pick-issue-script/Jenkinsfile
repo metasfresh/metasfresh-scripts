@@ -11,7 +11,7 @@ import groovy.json.JsonSlurper;
 properties([[$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false],
   parameters([
     string(defaultValue: 'metasfresh', description: 'github repo of the issue in question. Commits can also be in other repos.', name: 'MF_ISSUE_REPOSITORY'),
-    string(defaultValue: '', description: 'Issue number within MF_ISSUE_REPOSITORY. Just the number, no ''#''.', name: 'MF_ISSUE_NUMBER'),
+    string(defaultValue: '', description: 'Issue number within MF_ISSUE_REPOSITORY. Just the number, no \'#\'.', name: 'MF_ISSUE_NUMBER'),
     string(defaultValue: 'release', description: '', name: 'MF_TARGET_BRANCH')]),
   pipelineTriggers([])])
 
