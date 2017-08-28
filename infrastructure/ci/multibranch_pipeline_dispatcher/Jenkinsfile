@@ -62,7 +62,7 @@ def invokeDownStreamJobs(final String jobFolderName,
 			string(name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION', value: metasfreshProcurementWebuiVersion),
 			string(name: 'MF_METASFRESH_WEBUI_API_VERSION', value: metasfreshWebuiApiVersion),
 			string(name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION', value: metasfreshWebuiFrontendVersion)
-		], wait: false
+		], wait: true
 } // invokeDownStreamJobs
 
 properties([
@@ -74,24 +74,35 @@ This build will then attempt to use maven dependencies from that branch, and it 
 So if this is a "master" build, but it was invoked by a "feature-branch" build then this build will try to get the feature-branch\'s build artifacts annd will set its
 <code>currentBuild.displayname</code> and <code>currentBuild.description</code> to make it obvious that the build contains code from the feature branch.''',
 			name: 'MF_UPSTREAM_BRANCH'),
+
 		string(defaultValue: '',
 			description: 'Will be forwarded to jobs triggered by this job. Leave empty to go with <code>env.BUILD_NUMBER</code>',
 			name: 'MF_UPSTREAM_BUILDNO'),
+
 		string(defaultValue: '',
 			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_VERSION'),
+
 		string(defaultValue: '',
 			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION'),
+
 		string(defaultValue: '',
 			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_WEBUI_API_VERSION'),
+
 		string(defaultValue: '',
 			description: 'Version of the metasfresh-webui-frontend code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION'),
+
 		string(defaultValue: '',
 			description: 'Project/job folder names to trigger; can be a comma-separated list, but no whitespaces between list items.',
 			name: 'MF_PROJECT_NAMES'),
+
+		string(defaultValue: '',
+			description: 'Callback URL we can use to signal our caller whether the call failed or succeeded. Thx to the https://plugins.jenkins.io/webhook-step',
+			name: 'MF_WEBHOOK_CALLBACK_URL')
+
 	]),
 	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '100')) // keep the last 20 builds
 ])
@@ -106,20 +117,51 @@ stage("Trigger private multibranch downstream builds")
 
 		// need to use classic for-loop: https://issues.jenkins-ci.org/browse/JENKINS-34645
 		// for (final String jobName: jobNames)
+		// https://jenkins.io/doc/pipeline/examples/#jobs-in-parallel
+		def jobs = [:]
+
+		String result = 'OK'
 		for (int i = 0; i < jobNames.length; i++)
 		{
 			final jobName = jobNames[i];
 			echo "Attempting to invoke job '${jobName}'";
+			jobs[jobName] = {
+				invokeDownStreamJobs(
+					jobName,
+					params.MF_UPSTREAM_BUILDNO,
+					params.MF_UPSTREAM_BRANCH,
+					params.MF_METASFRESH_VERSION,
+					params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
+					params.MF_METASFRESH_WEBUI_API_VERSION,
+					params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
+					);
+			}
+		} // for
 
-			invokeDownStreamJobs(
-				jobName,
-				params.MF_UPSTREAM_BUILDNO,
-				params.MF_UPSTREAM_BRANCH,
-				params.MF_METASFRESH_VERSION,
-				params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
-				params.MF_METASFRESH_WEBUI_API_VERSION,
-				params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
-			);
+		try
+		{
+			parallel jobs
+		}
+		catch(all)
+		{
+    	result = "Job ${jobName} failed";
+    }
+
+		if(params.MF_WEBHOOK_CALLBACK_URL)
+		{
+			node('linux')
+			{
+				sh "curl -X POST -d '${result}' ${params.MF_WEBHOOK_CALLBACK_URL}"
+			}
+		}
+		else
+		{
+			echo "No callback URL was given; not attempting to notify upstream"
+		}
+
+		if(result != 'OK')
+		{
+			error result
 		}
 } // stage
 } // timestamps
