@@ -1,0 +1,94 @@
+#!/usr/bin/env groovy
+// the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
+// thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
+
+// thx to http://stackoverflow.com/a/36949007/1012103 with respect to the paramters
+properties([
+	parameters([
+		string(defaultValue: '',
+			description: 'Registry of the metasfresh-e2e docker image to run. Example: <code>nexus.metasfresh.com:6001</code>',
+			name: 'MF_DOCKER_REGISTRY'),
+		string(defaultValue: '',
+			description: 'Name of the metasfresh-e2e docker image to run. Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
+			name: 'MF_DOCKER_IMAGE'),
+		string(defaultValue: '',
+			description: 'Host name of the metasfresh instance to run the tests against',
+			name: 'MF_TARGET_HOST'),
+		string(defaultValue: 'metasfresh',
+			description: 'Username to use when logging in to the target host\'s metasfresh instance',
+			name: 'MF_TARGET_USER'),
+		password(defaultValue: 'metasfresh',
+			description: 'Password to use when logging in to the target host\'s metasfresh instance',
+			name: 'MF_TARGET_PASSWORD'),
+		booleanParam(defaultValue: true,
+			description: 'Upload the test results to <a href="https://dashboard.cypress.io">https://dashboard.cypress.io</a>. The secret key is provided by jenkins.',
+			name: 'MF_CYPRESS_DASHBOARD'),
+
+			// see https://github.com/metasfresh/metasfresh-scripts/issues/2
+			// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
+			// but the parameter was editable none the less
+		  // [$class: 'WReadonlyStringParameterDefinition',
+		string(
+			defaultValue: '',
+			description: 'URL of the build this deploy war triggered from (if any).',
+			name: 'MF_UPSTREAM_BUILD_URL')//]
+	])
+	//, buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
+]);
+
+
+if(!params.MF_DOCKER_IMAGE)
+{
+	error 'Missing MF_DOCKER_IMAGE parameter';
+}
+if(!params.MF_TARGET_HOST)
+{
+	error 'Missing MF_TARGET_HOST parameter';
+}
+
+echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
+
+final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
+
+// note that urlMatcher[0][0] is the whole matched string
+final artifactRepoName = urlMatcher[0][1];
+final fileNameWithoutExt = urlMatcher[0][2];
+urlMatcher = null; // see https://github.com/jenkinsci/pipeline-plugin/blob/master/TUTORIAL.md#serializing-local-variables
+
+echo "fileNameWithoutExt=${fileNameWithoutExt}";
+echo "artifactRepoName=${artifactRepoName}";
+
+final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)";
+
+currentBuild.description="""
+""";
+
+
+timestamps
+{
+stage("Perform e2e")
+{
+    node('master')
+    {
+		withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
+		{
+			final String dashboardParam = params.MF_CYPRESS_DASHBOARD ? "-e \"RECORD_KEY=${secretCypressRecorcdKey}\"" : ''
+			final String dockerRunParams = dashboardParam
+				+ "-e \"FRONTEND_URL=http://${MF_TARGET_HOST}:30080\"" 
+				+ "-e \"API_URL=http=http://${MF_TARGET_HOST}:8080/rest/api\""
+				+ "-e \"WS_URL=http=http://${MF_TARGET_HOST}:8080/stomp\"";
+
+			docker.withRegistry("https://${nexus.metasfresh.com:6001}/v2/")
+			{
+				def image = docker.image(params.MF_DOCKER_IMAGE)
+				def container;
+				try {
+					container = image.run(dockerRunParams)
+				} finally {
+					container.stop()
+				}
+			}
+		}
+	}
+}
+} // timestamps
