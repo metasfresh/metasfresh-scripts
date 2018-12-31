@@ -63,8 +63,8 @@ stage("Perform e2e")
 
 			sh """docker run ${dashboardParam} \\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
- -e \"API_URL=http=http://${params.MF_TARGET_HOST}:443/rest/api\"\\
- -e \"WS_URL=http=http://${params.MF_TARGET_HOST}:443/stomp\"\\
+ -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
+ -e \"WS_URL=https://${params.MF_TARGET_HOST}:443/stomp\"\\
  -e \"USERNAME=${params.MF_TARGET_USER}\"\\
  -e \"PASSWORD=${params.MF_TARGET_PASSWORD}\"\\
  ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
