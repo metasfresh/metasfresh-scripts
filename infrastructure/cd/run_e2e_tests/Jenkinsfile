@@ -5,8 +5,8 @@
 // thx to http://stackoverflow.com/a/36949007/1012103 with respect to the paramters
 properties([
 	parameters([
-		string(defaultValue: '',
-			description: 'Registry of the metasfresh-e2e docker image to run. Example: <code>nexus.metasfresh.com:6001</code>',
+		string(defaultValue: 'nexus.metasfresh.com:6001',
+			description: 'Registry of the metasfresh-e2e docker image to run.',
 			name: 'MF_DOCKER_REGISTRY'),
 		string(defaultValue: '',
 			description: 'Name of the metasfresh-e2e docker image to run. Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
@@ -36,7 +36,10 @@ properties([
 	//, buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
 ]);
 
-
+if(!params.MF_DOCKER_REGISTRY)
+{
+	error 'Missing MF_DOCKER_REGISTRY parameter';
+}
 if(!params.MF_DOCKER_IMAGE)
 {
 	error 'Missing MF_DOCKER_IMAGE parameter';
@@ -46,23 +49,7 @@ if(!params.MF_TARGET_HOST)
 	error 'Missing MF_TARGET_HOST parameter';
 }
 
-echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
-
-final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
-
-// note that urlMatcher[0][0] is the whole matched string
-final artifactRepoName = urlMatcher[0][1];
-final fileNameWithoutExt = urlMatcher[0][2];
-urlMatcher = null; // see https://github.com/jenkinsci/pipeline-plugin/blob/master/TUTORIAL.md#serializing-local-variables
-
-echo "fileNameWithoutExt=${fileNameWithoutExt}";
-echo "artifactRepoName=${artifactRepoName}";
-
 final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)";
-
-currentBuild.description="""
-""";
-
 
 timestamps
 {
@@ -78,7 +65,7 @@ stage("Perform e2e")
 				+ "-e \"API_URL=http=http://${MF_TARGET_HOST}:8080/rest/api\""
 				+ "-e \"WS_URL=http=http://${MF_TARGET_HOST}:8080/stomp\"";
 
-			docker.withRegistry("https://${nexus.metasfresh.com:6001}/v2/")
+			docker.withRegistry("https://${MF_DOCKER_REGISTRY}/v2/")
 			{
 				def image = docker.image(params.MF_DOCKER_IMAGE)
 				def container;
