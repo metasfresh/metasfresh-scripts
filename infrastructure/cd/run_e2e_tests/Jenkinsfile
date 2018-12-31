@@ -8,16 +8,16 @@ properties([
 		string(defaultValue: 'nexus.metasfresh.com:6001',
 			description: 'Registry of the metasfresh-e2e docker image to run.',
 			name: 'MF_DOCKER_REGISTRY'),
-		string(defaultValue: '',
+		string(defaultValue: 'metasfresh/metasfresh-e2e:master_LATEST',
 			description: 'Name of the metasfresh-e2e docker image to run. Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
 			name: 'MF_DOCKER_IMAGE'),
 		string(defaultValue: '',
 			description: 'Host name of the metasfresh instance to run the tests against',
 			name: 'MF_TARGET_HOST'),
-		string(defaultValue: 'metasfresh',
+		string(defaultValue: 'dev',
 			description: 'Username to use when logging in to the target host\'s metasfresh instance',
 			name: 'MF_TARGET_USER'),
-		password(defaultValue: 'metasfresh',
+		password(defaultValue: 'demo1234',
 			description: 'Password to use when logging in to the target host\'s metasfresh instance',
 			name: 'MF_TARGET_PASSWORD'),
 		booleanParam(defaultValue: true,
@@ -60,21 +60,25 @@ stage("Perform e2e")
 		withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
 		{
 			final String dashboardParam = params.MF_CYPRESS_DASHBOARD ? "-e \"RECORD_KEY=${secretCypressRecorcdKey}\"" : ''
-			final String dockerRunParams = dashboardParam
-				+ "-e \"FRONTEND_URL=http://${MF_TARGET_HOST}:30080\"" 
-				+ "-e \"API_URL=http=http://${MF_TARGET_HOST}:8080/rest/api\""
-				+ "-e \"WS_URL=http=http://${MF_TARGET_HOST}:8080/stomp\"";
 
-			docker.withRegistry("https://${MF_DOCKER_REGISTRY}/v2/")
-			{
-				def image = docker.image(params.MF_DOCKER_IMAGE)
-				def container;
-				try {
-					container = image.run(dockerRunParams)
-				} finally {
-					container.stop()
-				}
-			}
+			sh """docker run ${dashboardParam} \\
+ -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
+ -e \"API_URL=http=http://${params.MF_TARGET_HOST}:443/rest/api\"\\
+ -e \"WS_URL=http=http://${params.MF_TARGET_HOST}:443/stomp\"\\
+ -e \"USERNAME=${params.MF_TARGET_USER}\"\\
+ -e \"PASSWORD=${params.MF_TARGET_PASSWORD}\"\\
+ ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
+
+			// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
+			// {
+				// def image = docker.image("${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}")
+				// def container;
+				// try {
+				// 	container = image.run(dockerRunParams)
+				// } finally {
+				// 	container.stop()
+				// }
+			// }
 		}
 	}
 }
