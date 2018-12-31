@@ -5,9 +5,9 @@
 /**
  * This method will be used further down to call additional jobs such as metasfresh-procurement and metasfresh-webui
  */
-def invokeDownStreamJobs(final String jobFolderName, 
-	final String buildId, 
-	final String upstreamBranch, 
+def invokeDownStreamJobs(final String jobFolderName,
+	final String buildId,
+	final String upstreamBranch,
 	final String metasfreshVersion,
 	final String metasfreshProcurementWebuiVersion,
 	final String metasfreshWebuiApiVersion,
@@ -15,7 +15,7 @@ def invokeDownStreamJobs(final String jobFolderName,
 	)
 {
 	echo "Invoking downstream job from folder=${jobFolderName} with preferred branch=${upstreamBranch}"
-	
+
 	// if this is not the master branch but a feature branch, we need to find out if the "BRANCH_NAME" job exists or not
 	//
 	// Here i'm not checking if the build job exists but if the respective branch on github exists. If the branch is there, then I assume that the multibranch plugin also created the job
@@ -27,7 +27,7 @@ def invokeDownStreamJobs(final String jobFolderName,
 		// Perhaps you forgot to surround the code with a step that provides this, such as: node
 		// ...
 		// org.jenkinsci.plugins.workflow.steps.MissingContextVariableException: Required context class hudson.FilePath is missing
-		withCredentials([usernameColonPassword(credentialsId: 'github_metas-dev-priv', variable: 'GIT_CREDENTIALS')]) 
+		withCredentials([usernameColonPassword(credentialsId: 'github_metas-dev-priv', variable: 'GIT_CREDENTIALS')])
 		{
 			exitCode = sh returnStatus: true, script: "git ls-remote --exit-code https://${GIT_CREDENTIALS}@github.com/metasfresh/${jobFolderName} ${upstreamBranch}"
 		}
@@ -37,24 +37,24 @@ def invokeDownStreamJobs(final String jobFolderName,
 		echo "Branch ${upstreamBranch} also exists in ${jobFolderName}"
 		jobName = jobFolderName + "/" + upstreamBranch
 	}
-	else 
+	else
 	{
 		echo "Branch ${upstreamBranch} does not exist in ${jobFolderName}; falling back to master"
 		jobName = jobFolderName + "/master"
 	}
-	
+
 	// I also tried
-	// https://jenkins.metasfresh.com/job/metasfresh-multibranch/api/xml?tree=jobs[name] 
+	// https://jenkins.metasfresh.com/job/metasfresh-multibranch/api/xml?tree=jobs[name]
 	// which worked from chrome, also for metas-dev.
 	// It worked from the shell using curl (with [ and ] escaped) for user metas-ts and an access token,
 	// but did not work from the shell with curl and user metas-dev with "metas-dev is missing the Overall/Read permission"
 	// the curl string was sh "curl -XGET 'https://jenkins.metasfresh.com/job/metasfresh-multibranch/api/xml?tree=jobs%5Bname%5D' --user metas-dev:access-token
-	
-	// and I also tried inspecting the list returned by 
+
+	// and I also tried inspecting the list returned by
 	// Jenkins.instance.getAllItems()
 	// but there I got a scurity exception and am not sure if an how I can have a SCM maintained script that is approved by an admin
-	
-	build job: jobName, 
+
+	build job: jobName,
 		parameters: [
 			string(name: 'MF_UPSTREAM_BRANCH', value: upstreamBranch),
 			string(name: 'MF_UPSTREAM_BUILDNO', value: buildId),
@@ -62,51 +62,107 @@ def invokeDownStreamJobs(final String jobFolderName,
 			string(name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION', value: metasfreshProcurementWebuiVersion),
 			string(name: 'MF_METASFRESH_WEBUI_API_VERSION', value: metasfreshWebuiApiVersion),
 			string(name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION', value: metasfreshWebuiFrontendVersion)
-		], wait: false
-}
+		], wait: true
+} // invokeDownStreamJobs
 
 properties([
 	parameters([
-		string(defaultValue: '', 
+		string(defaultValue: '',
 			description: '''If this job is invoked via an updstream build job, then that job can provide either its branch or the respective <code>MF_UPSTREAM_BRANCH</code> that was passed to it.<br>
 This build will then attempt to use maven dependencies from that branch, and it will sets its own name to reflect the given value.
 <p>
 So if this is a "master" build, but it was invoked by a "feature-branch" build then this build will try to get the feature-branch\'s build artifacts annd will set its
-<code>currentBuild.displayname</code> and <code>currentBuild.description</code> to make it obvious that the build contains code from the feature branch.''', 
+<code>currentBuild.displayname</code> and <code>currentBuild.description</code> to make it obvious that the build contains code from the feature branch.''',
 			name: 'MF_UPSTREAM_BRANCH'),
-		string(defaultValue: '', 
-			description: 'Will be forwarded to jobs triggered by this job. Leave empty to go with <code>env.BUILD_NUMBER</code>', 
+
+		string(defaultValue: '',
+			description: 'Will be forwarded to jobs triggered by this job. Leave empty to go with <code>env.BUILD_NUMBER</code>',
 			name: 'MF_UPSTREAM_BUILDNO'),
-		string(defaultValue: '', 
-			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+
+		string(defaultValue: '',
+			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_VERSION'),
-		string(defaultValue: '', 
-			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+
+		string(defaultValue: '',
+			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION'),
-		string(defaultValue: '', 
-			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+
+		string(defaultValue: '',
+			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_WEBUI_API_VERSION'),
-		string(defaultValue: '', 
-			description: 'Version of the metasfresh-webui-frontend code we shall use when resolving dependencies. Leave empty and this build will use the latest.', 
+
+		string(defaultValue: '',
+			description: 'Version of the metasfresh-webui-frontend code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
 			name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION'),
-		string(defaultValue: '', 
-			description: 'Project/job folder name to trigger', 
-			name: 'MF_PROJECT_NAME'),
-	]), 
+
+		string(defaultValue: '',
+			description: 'Project/job folder names to trigger; can be a comma-separated list, but no whitespaces between list items.',
+			name: 'MF_PROJECT_NAMES'),
+
+		string(defaultValue: '',
+			description: 'Callback URL we can use to signal our caller whether the call failed or succeeded. Thx to the https://plugins.jenkins.io/webhook-step',
+			name: 'MF_WEBHOOK_CALLBACK_URL')
+
+	]),
 	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '100')) // keep the last 20 builds
 ])
 
-timestamps 
+timestamps
 {
-stage("Trigger multibranch build")
+stage("Trigger private multibranch downstream builds")
 {
-	invokeDownStreamJobs(params.MF_PROJECT_NAME, 
-		params.MF_UPSTREAM_BUILDNO, 
-		params.MF_UPSTREAM_BRANCH, 
-		params.MF_METASFRESH_VERSION,
-		params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
-		params.MF_METASFRESH_WEBUI_API_VERSION,
-		params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
-		)
+		echo "MF_PROJECT_NAMES=${params.MF_PROJECT_NAMES}";
+
+		final String[] jobNames = params.MF_PROJECT_NAMES.tokenize(',');
+
+		// need to use classic for-loop: https://issues.jenkins-ci.org/browse/JENKINS-34645
+		// for (final String jobName: jobNames)
+		// https://jenkins.io/doc/pipeline/examples/#jobs-in-parallel
+		def jobs = [:]
+
+		String result = 'OK'
+		for (int i = 0; i < jobNames.length; i++)
+		{
+			final jobName = jobNames[i];
+			echo "Attempting to invoke job '${jobName}'";
+			jobs[jobName] = {
+				invokeDownStreamJobs(
+					jobName,
+					params.MF_UPSTREAM_BUILDNO,
+					params.MF_UPSTREAM_BRANCH,
+					params.MF_METASFRESH_VERSION,
+					params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
+					params.MF_METASFRESH_WEBUI_API_VERSION,
+					params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
+					);
+			}
+		} // for
+
+		try
+		{
+			parallel jobs
+		}
+		catch(all)
+		{
+			echo "Caught exception ${all}"
+    	result = "One of the private downstream jobs failed";
+    }
+
+		if(params.MF_WEBHOOK_CALLBACK_URL)
+		{
+			node('linux')
+			{
+				sh "curl -X POST -d '${result}' ${params.MF_WEBHOOK_CALLBACK_URL}"
+			}
+		}
+		else
+		{
+			echo "No callback URL was given; not attempting to notify upstream"
+		}
+
+		if(result != 'OK')
+		{
+			error result
+		}
 } // stage
 } // timestamps

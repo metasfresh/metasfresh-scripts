@@ -51,14 +51,15 @@ stage("Checkout repos")
 		deleteDir(); // clear or workspace
 		sshagent(['metas-dev-ssh-key'])
 		{
-				updateReleaseBranch 'metasfresh-parent';
-				updateReleaseBranch 'metasfresh-admin';
-				updateReleaseBranch 'metasfresh';
-				updateReleaseBranch 'metasfresh-webui-api';
-				updateReleaseBranch 'metasfresh-webui-frontend';
-				updateReleaseBranch 'metasfresh-procurement-webui';
-				updateReleaseBranch 'metasfresh-dist';
-				updateReleaseBranch 'metasfresh-dist-orgs';
+				updateReleaseBranch 'metasfresh-release-info'
+				updateReleaseBranch 'metasfresh-parent'
+				updateReleaseBranch 'metasfresh-admin'
+				updateReleaseBranch 'metasfresh'
+				updateReleaseBranch 'metasfresh-webui-api'
+				updateReleaseBranch 'metasfresh-webui-frontend'
+				updateReleaseBranch 'metasfresh-procurement-webui'
+				updateReleaseBranch 'metasfresh-dist'
+				updateReleaseBranch 'metasfresh-dist-orgs'
 		}
 	}
 }
