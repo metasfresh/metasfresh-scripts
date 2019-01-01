@@ -23,7 +23,9 @@ properties([
 		booleanParam(defaultValue: true,
 			description: 'Upload the test results to <a href="https://dashboard.cypress.io">https://dashboard.cypress.io</a>. The secret key is provided by jenkins.',
 			name: 'MF_CYPRESS_DASHBOARD'),
-
+		booleanParam(defaultValue: true,
+			description: 'Prepend <code>DEBUG=cypress:*</code>; See https://docs.cypress.io/guides/guides/command-line.html#Debugging-commands',
+			name: 'MF_CYPRESS_DEBUG'),
 			// see https://github.com/metasfresh/metasfresh-scripts/issues/2
 			// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
 			// but the parameter was editable none the less
@@ -60,8 +62,9 @@ stage("Perform e2e")
 		withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
 		{
 			final String dashboardParam = params.MF_CYPRESS_DASHBOARD ? "-e \"RECORD_KEY=${secretCypressRecorcdKey}\"" : ''
+			final String debugParam = params.MF_CYPRESS_DEBUG ? "-e \"DEBUG=debug\"" : ''
 
-			sh """docker run ${dashboardParam} \\
+			sh """docker run ${dashboardParam} ${debugParam} \\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
  -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
  -e \"WS_URL=https://${params.MF_TARGET_HOST}:443/stomp\"\\
