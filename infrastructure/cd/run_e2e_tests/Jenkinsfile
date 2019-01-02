@@ -62,7 +62,7 @@ stage("Perform e2e")
 		withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
 		{
 			final String dashboardParam = params.MF_CYPRESS_DASHBOARD ? "-e \"RECORD_KEY=${secretCypressRecorcdKey}\"" : ''
-			final String debugParam = params.MF_CYPRESS_DEBUG ? "-e \"DEBUG=debug\"" : ''
+			final String debugParam = params.MF_CYPRESS_DEBUG ? "-e \"DEBUG_CYPRESS_OUTPUT=y\"" : ''
 
 			sh """docker run ${dashboardParam} ${debugParam} \\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
