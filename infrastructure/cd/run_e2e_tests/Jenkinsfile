@@ -23,13 +23,14 @@ properties([
 		booleanParam(defaultValue: true,
 			description: 'Upload the test results to <a href="https://dashboard.cypress.io">https://dashboard.cypress.io</a>. The secret key is provided by jenkins.',
 			name: 'MF_CYPRESS_DASHBOARD'),
-		booleanParam(defaultValue: true,
+		booleanParam(defaultValue: false,
 			description: 'Prepend <code>DEBUG=cypress:*</code>; See https://docs.cypress.io/guides/guides/command-line.html#Debugging-commands',
 			name: 'MF_CYPRESS_DEBUG'),
-			// see https://github.com/metasfresh/metasfresh-scripts/issues/2
-			// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
-			// but the parameter was editable none the less
-		  // [$class: 'WReadonlyStringParameterDefinition',
+
+		// see https://github.com/metasfresh/metasfresh-scripts/issues/2
+		// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
+		// but the parameter was editable none the less
+		// [$class: 'WReadonlyStringParameterDefinition',
 		string(
 			defaultValue: '',
 			description: 'URL of the build this deploy war triggered from (if any).',
