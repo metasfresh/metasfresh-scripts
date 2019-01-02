@@ -11,7 +11,7 @@ properties([
 		string(defaultValue: 'metasfresh/metasfresh-e2e:master_LATEST',
 			description: 'Name of the metasfresh-e2e docker image to run. Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
 			name: 'MF_DOCKER_IMAGE'),
-		string(defaultValue: '',
+		string(defaultValue: 'INSTANCE.metasfresh.com',
 			description: 'Host name of the metasfresh instance to run the tests against',
 			name: 'MF_TARGET_HOST'),
 		string(defaultValue: 'dev',
@@ -26,6 +26,9 @@ properties([
 		booleanParam(defaultValue: false,
 			description: 'Prepend <code>DEBUG=cypress:*</code>; See https://docs.cypress.io/guides/guides/command-line.html#Debugging-commands',
 			name: 'MF_CYPRESS_DEBUG'),
+		booleanParam(defaultValue: true,
+			description: 'Run the cypress tests in chrome as opposed to electron',
+			name: 'MF_CYPRESS_CHROME'),
 
 		// see https://github.com/metasfresh/metasfresh-scripts/issues/2
 		// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
@@ -56,34 +59,42 @@ final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)
 
 timestamps
 {
-stage("Perform e2e")
-{
-    node('master')
-    {
-		withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
+	stage("Perform e2e")
+	{
+		node('agent && linux') // shall only run on a jenkins agent with linux
 		{
-			final String dashboardParam = params.MF_CYPRESS_DASHBOARD ? "-e \"RECORD_KEY=${secretCypressRecorcdKey}\"" : ''
-			final String debugParam = params.MF_CYPRESS_DEBUG ? "-e \"DEBUG_CYPRESS_OUTPUT=y\"" : ''
+			withCredentials([string(credentialsId: 'cypress-dashboard-metasfresh-record-key', variable: 'secretCypressRecorcdKey')])
+			{
+				final String recordKey = params.MF_CYPRESS_DASHBOARD ? secretCypressRecorcdKey : 'NOT_SET'
+				final String debugOutput = params.MF_CYPRESS_DEBUG ? 'y' : 'n'
+				final String browser = params.MF_CYPRESS_CHROME ? 'chrome' : 'electron'
 
-			sh """docker run ${dashboardParam} ${debugParam} \\
+				final String dockerRunCommand = """docker run --rm\\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
  -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
  -e \"WS_URL=https://${params.MF_TARGET_HOST}:443/stomp\"\\
  -e \"USERNAME=${params.MF_TARGET_USER}\"\\
  -e \"PASSWORD=${params.MF_TARGET_PASSWORD}\"\\
+ -e \"RECORD_KEY=${recordKey}\"\\
+ -e \"DEBUG_CYPRESS_OUTPUT=${debugOutput}\"\\
+ -e \"BROWSER=${browser}\"\\
  ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
 
-			// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
-			// {
-				// def image = docker.image("${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}")
-				// def container;
-				// try {
-				// 	container = image.run(dockerRunParams)
-				// } finally {
-				// 	container.stop()
+				sh dockerRunCommand
+
+				// i didn't manage to get the following to work, that's why I run docker directly in the shell
+				// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
+				// {
+					// def image = docker.image("${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}")
+					// def container;
+					// try {
+					// 	container = image.run(dockerRunParams)
+					// } finally {
+					// 	container.stop()
+					// }
 				// }
-			// }
+
+			}
 		}
 	}
 }
-} // timestamps
