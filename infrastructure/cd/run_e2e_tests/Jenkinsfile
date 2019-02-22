@@ -69,6 +69,12 @@ timestamps
 				final String debugOutput = params.MF_CYPRESS_DEBUG ? 'y' : 'n'
 				final String browser = params.MF_CYPRESS_CHROME ? 'chrome' : 'electron'
 
+				// create a local results folder and mount it into the docker container
+				// the patch wiwthing the docker container needs to be in sync with reporter-config.json
+				sh 'mkdir -p \"$(pwd)\"/testreports'
+				final String mount_param='--mount type=bind,source=\"$(pwd)\"/testreports,target=/e2e/cypress/results'
+				final String junitFile='testreports/results-junit-*.xml'
+
 				final String dockerRunCommand = """docker run --rm\\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
  -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
@@ -78,9 +84,15 @@ timestamps
  -e \"RECORD_KEY=${recordKey}\"\\
  -e \"DEBUG_CYPRESS_OUTPUT=${debugOutput}\"\\
  -e \"BROWSER=${browser}\"\\
- ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
+ ${mount_param} ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
 
 				sh dockerRunCommand
+
+				// collect and archive test results
+				junit junitFile
+
+				// cleanup
+				sh 'rm ${junitFile}'
 
 				// i didn't manage to get the following to work, that's why I run docker directly in the shell
 				// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
