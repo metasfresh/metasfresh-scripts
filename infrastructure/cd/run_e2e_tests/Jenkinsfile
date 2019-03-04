@@ -6,11 +6,14 @@
 properties([
 	parameters([
 		string(defaultValue: 'nexus.metasfresh.com:6001',
-			description: 'Registry of the metasfresh-e2e docker image to run.',
+			description: 'Registry of the metasfresh-e2e docker image to run. Used if <code>MF_DOCKER_IMAGE_FULL_NAME</code> is empty;',
 			name: 'MF_DOCKER_REGISTRY'),
 		string(defaultValue: 'metasfresh/metasfresh-e2e:master_LATEST',
-			description: 'Name of the metasfresh-e2e docker image to run. Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
+			description: 'Name of the metasfresh-e2e docker image to run. Used if <code>MF_DOCKER_IMAGE_FULL_NAME</code> is empty; Example: <code>metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
 			name: 'MF_DOCKER_IMAGE'),
+		string(defaultValue: 'metasfresh/metasfresh-e2e:master_LATEST',
+			description: '\"Full\" name of the metasfresh-e2e docker image to run. Example: <code>nexus.metasfresh.com:6001/metasfresh/metasfresh-e2e:master_5.86.1_7_master</code>',
+			name: 'MF_DOCKER_IMAGE_FULL_NAME'),
 		string(defaultValue: 'INSTANCE.metasfresh.com',
 			description: 'Host name of the metasfresh instance to run the tests against',
 			name: 'MF_TARGET_HOST'),
@@ -36,19 +39,19 @@ properties([
 		// [$class: 'WReadonlyStringParameterDefinition',
 		string(
 			defaultValue: '',
-			description: 'URL of the build this deploy war triggered from (if any).',
+			description: 'URL of the build this deploy was triggered from (if any).',
 			name: 'MF_UPSTREAM_BUILD_URL')//]
 	])
 	//, buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: "100"))
 ]);
 
-if(!params.MF_DOCKER_REGISTRY)
+if(!params.MF_DOCKER_REGISTRY && !params.MF_DOCKER_IMAGE_FULL_NAME)
 {
-	error 'Missing MF_DOCKER_REGISTRY parameter';
+	error 'Missing MF_DOCKER_REGISTRY or MF_DOCKER_IMAGE_FULL_NAME parameter';
 }
-if(!params.MF_DOCKER_IMAGE)
+if(!params.MF_DOCKER_IMAGE && !params.MF_DOCKER_IMAGE_FULL_NAME)
 {
-	error 'Missing MF_DOCKER_IMAGE parameter';
+	error 'Missing MF_DOCKER_IMAGE or MF_DOCKER_IMAGE_FULL_NAME parameter';
 }
 if(!params.MF_TARGET_HOST)
 {
@@ -75,6 +78,8 @@ timestamps
 				final String mount_param='--mount type=bind,source=\"$(pwd)\"/testreports,target=/e2e/cypress/results'
 				final String junitFile='testreports/results-junit-*.xml'
 
+				final String dockerImageToUse = params.MF_DOCKER_IMAGE_FULL_NAME ?: "${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"
+
 				final String dockerRunCommand = """docker run --rm\\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
  -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
@@ -84,7 +89,7 @@ timestamps
  -e \"RECORD_KEY=${recordKey}\"\\
  -e \"DEBUG_CYPRESS_OUTPUT=${debugOutput}\"\\
  -e \"BROWSER=${browser}\"\\
- ${mount_param} ${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"""
+ ${mount_param} dockerImageToUse"""
 
 				sh dockerRunCommand
 
