@@ -97,7 +97,8 @@ timestamps
 				junit junitFile
 
 				// cleanup
-				sh 'rm ${junitFile}'
+				cleanWs cleanWhenAborted: false, cleanWhenFailure: false, cleanWhenNotBuilt: false, cleanWhenUnstable: false, notFailBuild: true
+				//sh 'rm ${junitFile}'
 
 				// i didn't manage to get the following to work, that's why I run docker directly in the shell
 				// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
