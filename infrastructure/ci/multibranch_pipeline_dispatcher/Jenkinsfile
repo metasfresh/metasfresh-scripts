@@ -145,8 +145,8 @@ stage("Trigger private multibranch downstream builds")
 		catch(all)
 		{
 			echo "Caught exception ${all}"
-    	result = "One of the private downstream jobs failed";
-    }
+			result = "One of the private downstream jobs failed or is unstable";
+		}
 
 		if(params.MF_WEBHOOK_CALLBACK_URL)
 		{
