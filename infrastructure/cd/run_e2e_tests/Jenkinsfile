@@ -62,7 +62,7 @@ final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)
 
 timestamps
 {
-	currentBuild.displayName = "${currentBuild.displayName} - run ${params.MF_UPSTREAM_BUILD_URL ?: ''} on ${params.MF_TARGET_HOST}";
+	currentBuild.displayName = "${currentBuild.displayName} - ${params.MF_UPSTREAM_BUILD_URL ?: ''} on ${params.MF_TARGET_HOST}";
 
 	stage("Perform e2e")
 	{
