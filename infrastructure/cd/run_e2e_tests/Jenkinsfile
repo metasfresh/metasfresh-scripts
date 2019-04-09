@@ -62,6 +62,8 @@ final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)
 
 timestamps
 {
+	currentBuild.displayName = "${currentBuild.displayName} - run ${params.MF_UPSTREAM_BUILD_URL ?: ''} on ${params.MF_TARGET_HOST}";
+
 	stage("Perform e2e")
 	{
 		node('agent && linux') // shall only run on a jenkins agent with linux
