@@ -30,7 +30,7 @@ properties([
 			description: 'Prepend <code>DEBUG=cypress:*</code>; See https://docs.cypress.io/guides/guides/command-line.html#Debugging-commands',
 			name: 'MF_CYPRESS_DEBUG'),
 		booleanParam(defaultValue: true,
-			description: 'Run the cypress tests in chrome as opposed to electron',
+			description: 'Run the cypress tests in chrome as opposed to electron; note that video is only supported with electron; but currently, electron "hangs"',
 			name: 'MF_CYPRESS_CHROME'),
 
 		// see https://github.com/metasfresh/metasfresh-scripts/issues/2
@@ -62,7 +62,17 @@ final String upstreamBuildURL = params.MF_UPSTREAM_BUILD_URL ?: "(none provided)
 
 timestamps
 {
-	currentBuild.displayName = "${currentBuild.displayName} RUN ${params.MF_UPSTREAM_BUILD_URL ?: ''} ON ${params.MF_TARGET_HOST}";
+	final String shortUpstreamJobName
+	if(params.MF_UPSTREAM_BUILD_URL)
+	{
+		final def reg = ~/^https:\/\/jenkins.metasfresh.com\/job\/metasfresh-e2e\/job\//
+		shortUpstreamJobName = params.MF_UPSTREAM_BUILD_URL - reg
+	}
+	else 
+	{
+		shortUpstreamJobName = ''
+	}
+	currentBuild.displayName = "${currentBuild.displayName} RUN ${shortUpstreamJobName} ON ${params.MF_TARGET_HOST}";
 
 	stage("Perform e2e")
 	{
