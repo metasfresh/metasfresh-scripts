@@ -92,6 +92,8 @@ timestamps
 
 				final String dockerImageToUse = params.MF_DOCKER_IMAGE_FULL_NAME ?: "${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"
 
+				sh label: 'delete-existing-image', returnStatus: true, script: "docker rmi ${dockerImageToUse}"				
+
 				final String dockerRunCommand = """docker run --rm\\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
  -e \"API_URL=https://${params.MF_TARGET_HOST}:443/rest/api\"\\
@@ -103,7 +105,7 @@ timestamps
  -e \"BROWSER=${browser}\"\\
  ${mount_param} ${dockerImageToUse}"""
 
-				sh dockerRunCommand
+				sh label: 'pull-and-run-image', script: dockerRunCommand
 
 				// collect and archive test results
 				junit junitFile
