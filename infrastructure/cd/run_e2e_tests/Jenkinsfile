@@ -2,6 +2,10 @@
 // the "!#/usr/bin... is just to to help IDEs, GitHub diffs, etc properly detect the language and do syntax highlighting for you.
 // thx to https://github.com/jenkinsci/pipeline-examples/blob/master/docs/BEST_PRACTICES.md
 
+// note that we set a default version for this library in jenkins, so we don't have to specify it here
+@Library('misc')
+import de.metas.jenkins.Misc
+
 // thx to http://stackoverflow.com/a/36949007/1012103 with respect to the paramters
 properties([
 	parameters([
@@ -65,6 +69,7 @@ timestamps
 	final String shortUpstreamJobName
 	if(params.MF_UPSTREAM_BUILD_URL)
 	{
+		// remove the jenkins-job-URL's prefix
 		final def reg = ~/^https:\/\/jenkins.metasfresh.com\/job\/metasfresh-e2e\/job\//
 		shortUpstreamJobName = params.MF_UPSTREAM_BUILD_URL - reg
 	}
@@ -90,9 +95,25 @@ timestamps
 				final String mount_param='--mount type=bind,source=\"$(pwd)\"/testreports,target=/e2e/cypress/results'
 				final String junitFile='testreports/results-junit-*.xml'
 
-				final String dockerImageToUse = params.MF_DOCKER_IMAGE_FULL_NAME ?: "${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"
+				// invoke the nexus REST API to find the docker image's sha256.
+				// without this, e.g. in the case of a "master_LATEST" image tag, we won't get the lastest image version
+				final String dockerRegistryAndImageAndTag = params.MF_DOCKER_IMAGE_FULL_NAME ?: "${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}"
 
-				sh label: 'delete-existing-image', returnStatus: true, script: "docker rmi ${dockerImageToUse}"				
+				final def registryRegExp = ~/^[a-zA-Z][a-zA-Z0-9\.]*:[0-9]+\//
+				final String dockerImageAndTag = dockerRegistryAndImageAndTag - registryRegExp
+				final String dockerImage = dockerImageAndTag.tokenize(':')[0]
+				final String dockerTag = dockerImageAndTag.tokenize(':')[1]
+
+				echo "dockerRegistryAndImageAndTag=${dockerRegistryAndImageAndTag}; => dockerImage=${dockerImage}; dockerTag=${dockerTag}"
+
+				final def misc = new de.metas.jenkins.Misc();
+
+				// thx to https://chadmayfield.com/2018/09/01/pulling-artifacts-from-nexus-in-less-than-25-lines-of-bash/
+				final String nexusQueryUrl = "https://nexus.metasfresh.com/service/rest/v1/search/assets?docker.imageName=${misc.urlEncode(dockerImage)}&docker.imageTag=${misc.urlEncode(dockerTag)}"
+				final String curlCommand = "curl -s -X GET \"${nexusQueryUrl}\" -H \"accept: application/json\" | grep -Po '\"sha256\" *: .*' | awk -F '\"' '{print \$4}'"
+
+				final String dockerImageSha256 = sh label: 'Retrieve docker-image sha256', returnStdout: true, script: curlCommand
+				echo "dockerImageSha256=${dockerImageSha256}"
 
 				final String dockerRunCommand = """docker run --rm\\
  -e \"FRONTEND_URL=https://${params.MF_TARGET_HOST}:443\"\\
@@ -103,7 +124,7 @@ timestamps
  -e \"RECORD_KEY=${recordKey}\"\\
  -e \"DEBUG_CYPRESS_OUTPUT=${debugOutput}\"\\
  -e \"BROWSER=${browser}\"\\
- ${mount_param} ${dockerImageToUse}"""
+ ${mount_param} ${dockerRegistryAndImageAndTag}@sha256:${dockerImageSha256}"""
 
 				sh label: 'pull-and-run-image', script: dockerRunCommand
 
@@ -112,20 +133,6 @@ timestamps
 
 				// cleanup
 				cleanWs cleanWhenAborted: false, cleanWhenFailure: false, cleanWhenNotBuilt: false, cleanWhenUnstable: false, notFailBuild: true
-				//sh 'rm ${junitFile}'
-
-				// i didn't manage to get the following to work, that's why I run docker directly in the shell
-				// docker.withRegistry("https://${params.MF_DOCKER_REGISTRY}/v2/")
-				// {
-					// def image = docker.image("${params.MF_DOCKER_REGISTRY}/${params.MF_DOCKER_IMAGE}")
-					// def container;
-					// try {
-					// 	container = image.run(dockerRunParams)
-					// } finally {
-					// 	container.stop()
-					// }
-				// }
-
 			}
 		}
 	}
