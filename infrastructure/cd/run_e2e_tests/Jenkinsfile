@@ -158,7 +158,7 @@ String retrieveDockerUrlToUse(final String dockerRegImageAndTag)
 			}
 			else
 			{
-				fail "Found no sha256 to tag=${dockerTag} or fallback-tag=${fallbackDockerTag}"
+				error "Found no sha256 to tag=${dockerTag} or fallback-tag=${fallbackDockerTag}"
 			}
 		}
 	}
