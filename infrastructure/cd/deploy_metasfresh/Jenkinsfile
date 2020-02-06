@@ -54,7 +54,7 @@ def invokeRemote = { String sshTargetHost, String sshTargetUser, String director
 
 echo "Parsing MF_ROLLOUT_FILE_URL=${params.MF_ROLLOUT_FILE_URL}";
 
-final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*\\/repositories\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
+final urlMatcher = params.MF_ROLLOUT_FILE_URL =~ '.*\\/repository\\/([^\\/]+)/.*/([^\\/]+)\\.tar\\.gz';
 
 // note that urlMatcher[0][0] is the whole matched string
 final artifactRepoName = urlMatcher[0][1];
