@@ -76,25 +76,25 @@ So if this is a "master" build, but it was invoked by a "feature-branch" build t
 			name: 'MF_UPSTREAM_BRANCH'),
 
 		string(defaultValue: '',
-			description: 'Will be forwarded to jobs triggered by this job. Leave empty to go with <code>env.BUILD_NUMBER</code>',
-			name: 'MF_UPSTREAM_BUILDNO'),
-
-		string(defaultValue: '',
-			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
+			description: 'Version of the metasfresh "main" code we shall use when resolving dependencies. Leave empty and this build will use <code>&lt;effective-branch-name&gt;_LATEST</code>.',
 			name: 'MF_METASFRESH_VERSION'),
 
 		string(defaultValue: '',
-			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
+			description: 'Version of the metasfresh procurement webui code we shall use when resolving dependencies. Leave empty and this build will use t<code>&lt;effective-branch-name&gt;_LATEST</code>.',
 			name: 'MF_METASFRESH_PROCUREMENT_WEBUI_VERSION'),
 
 		string(defaultValue: '',
-			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
+			description: 'Version of the metasfresh-webui(-API) code we shall use when resolving dependencies. Leave empty and this build will use <code>&lt;effective-branch-name&gt;_LATEST</code>.',
 			name: 'MF_METASFRESH_WEBUI_API_VERSION'),
 
 		string(defaultValue: '',
-			description: 'Version of the metasfresh-webui-frontend code we shall use when resolving dependencies. Leave empty and this build will use the latest.',
-			name: 'MF_METASFRESH_WEBUI_FRONTEND_VERSION'),
+			description: 'edi docker image. Leave empty and this build will <code>&lt;effective-branch-name&gt;_LATEST</code>',
+			name: 'MF_METASFRESH_EDI_DOCKER_IMAGE'),
 
+		string(defaultValue: '',
+			description: 'e2e docker image. Leave empty and this build will <code>&lt;effective-branch-name&gt;_LATEST</code>',
+			name: 'MF_METASFRESH_E2E_DOCKER_IMAGE'),
+		
 		string(defaultValue: '',
 			description: 'Project/job folder names to trigger; can be a comma-separated list, but no whitespaces between list items.',
 			name: 'MF_PROJECT_NAMES'),
@@ -103,8 +103,17 @@ So if this is a "master" build, but it was invoked by a "feature-branch" build t
 			description: 'Callback URL we can use to signal our caller whether the call failed or succeeded. Thx to the https://plugins.jenkins.io/webhook-step',
 			name: 'MF_WEBHOOK_CALLBACK_URL')
 
+		// see https://github.com/metasfresh/metasfresh-scripts/issues/2
+		// note: I tried to use https://wiki.jenkins-ci.org/display/JENKINS/Readonly+Parameter+Plugin
+		// but the parameter was editable none the less
+		// [$class: 'WReadonlyStringParameterDefinition',
+		string(
+			defaultValue: '',
+			description: 'URL of the build this deploy was triggered from (if any).',
+			name: 'MF_UPSTREAM_BUILD_URL')//]
+
 	]),
-	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '100')) // keep the last 20 builds
+	buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '100')) // keep the last 100 builds
 ])
 
 timestamps
@@ -128,13 +137,15 @@ stage("Trigger private multibranch downstream builds")
 			jobs[jobName] = {
 				invokeDownStreamJobs(
 					jobName,
-					params.MF_UPSTREAM_BUILDNO,
+					params.MF_UPSTREAM_BUILD_URL,
 					params.MF_UPSTREAM_BRANCH,
 					params.MF_METASFRESH_VERSION,
 					params.MF_METASFRESH_PROCUREMENT_WEBUI_VERSION,
 					params.MF_METASFRESH_WEBUI_API_VERSION,
 					params.MF_METASFRESH_WEBUI_FRONTEND_VERSION,
-					);
+					params.MF_METASFRESH_EDI_DOCKER_IMAGE,
+					params.MF_METASFRESH_E2E_DOCKER_IMAGE
+				);
 			}
 		} // for
 
